@@ -1,9 +1,9 @@
 ---
 name: skill-router
-description: "中文/English Skill Router V3.3 Native-Todo-Synced UI-Polish-Required Resume-Safe Todo-Bound Hard-Gated for Trae CN. Use when user asks to prioritize available skills, choose suitable skills, create/find/install/verify skills, or use gstack QA/browser testing/freeze/guard/review/ship abilities. Routes only current available top-level skills, prevents fake skill calls, orchestrates multi-skill expert collaboration across task phases, and enforces visible stage-by-stage router checkpoints with hard gates, and binds router checkpoints to the task plan / todo list dynamically."
+description: "中文/English Skill Router V3.4 Skill-Invocation-Proof Native-Todo-Synced UI-Polish-Required Resume-Safe Todo-Bound Hard-Gated for Trae CN. Use when user asks to prioritize available skills, choose suitable skills, create/find/install/verify skills, or use gstack QA/browser testing/freeze/guard/review/ship abilities. Routes only current available top-level skills, prevents fake skill calls, orchestrates multi-skill expert collaboration across task phases, and enforces visible stage-by-stage router checkpoints with hard gates, and binds router checkpoints to the task plan / todo list dynamically."
 ---
 
-# Skill Router V3.3 Native-Todo-Synced UI-Polish-Required Resume-Safe Todo-Bound Hard-Gated / Multi-Skill Expert Orchestrator
+# Skill Router V3.4 Skill-Invocation-Proof Skill-Invocation-Proof Native-Todo-Synced UI-Polish-Required Resume-Safe Todo-Bound Hard-Gated / Multi-Skill Expert Orchestrator
 
 ## Purpose / 用途
 
@@ -20,7 +20,7 @@ This skill is a **routing and orchestration skill** for Trae CN AI Coder.
 7. 当需要 gstack 子能力时，如何通过顶层 `gstack` 触发。
 8. 如何在任务结束时记录 skill 使用计划、使用总结和验证方式。
 
-V3.3 的核心变化：
+V3.4 的核心变化：
 
 - 从“找最少够用 skills”改为“组建多 skill 专家团”。
 - 从“任务开始只路由一次”改为“每个关键阶段重新路由一次”。
@@ -33,15 +33,242 @@ V3.3 的核心变化：
 - **新增 Native Todo Sync Gate**：当 TRAE 提供原生 To-Do List / 计划列表工具时，router gate 和 work item 必须优先同步到原生计划列表；只在聊天正文里写 gate 不算完整 todo-bound。
 - **新增 Design Stage Skill Minimum**：UI / frontend / PDF layout / report cover / dashboard / landing page 等视觉任务，设计阶段默认至少使用一个设计类 skill，避免普通模型自己脑补设计。
 - **新增 QA Skill Attribution Consistency**：当选择 `gstack` 做 browser QA 且底层使用 Chrome DevTools MCP 时，最终台账必须写成 `gstack（browser testing intent）+ Chrome DevTools MCP`，不能只写 MCP 或只写 gstack。
+- **新增 Skill Invocation Proof Gate**：最终台账必须把每个 skill 区分为 `Confirmed`、`Inferred`、`Planned only`，禁止把仅在计划中提到、但没有调用证据的 skill 写成实际调用。
 
 
-## V3.3 Hard-Gate Patch / V3.3 硬闸门补丁
+
+## V3.4 Skill Invocation Proof Gate Patch / V3.4 Skill 调用证据闸门补丁
+
+This patch exists because weak agents may produce a good-looking Stage Marker Ledger but still mix together three different things:
+
+1. skills that were actually invoked;
+2. skills whose rules were only behaviorally followed;
+3. skills that were only mentioned in the plan.
+
+That is NOT auditable.
+
+中文目标：
+
+```text
+不要把“计划使用 / 候选 skill / 自己按类似思路做了”写成“实际调用了 skill”。
+每个 skill 都必须有调用证据等级。
+```
+
+### 1. Skill proof levels / Skill 证据等级
+
+Every skill mentioned in a router pass, close block, or final ledger MUST be classified as exactly one of these proof levels:
+
+| Proof level | 中文名 | Definition / 定义 | Can be listed as actual skill used? |
+|---|---|---|---|
+| `Confirmed` | 已确认调用 | TRAE UI shows `toolName: Skill`, or the assistant visibly loads/invokes that skill and receives identifiable skill output. | Yes |
+| `Inferred` | 行为推断生效 | The UI does not show a visible skill invocation, but the behavior clearly follows that skill's rules or workflow. | No, list separately |
+| `Planned only` | 仅计划/候选 | The skill was only mentioned in a plan, candidate pool, future checkpoint, or intended action. | No |
+| `Unavailable / failed` | 不可用/调用失败 | The skill was selected or intended, but the call failed, the skill was unavailable, or the tool could not run. | No |
+
+Only `Confirmed` skills may be listed under:
+
+```text
+实际调用 skills
+Actual skills used
+Confirmed skill calls
+```
+
+`Inferred` skills must be listed under:
+
+```text
+行为推断生效 / Behavior-inferred skill guidance
+```
+
+`Planned only` skills must be listed under:
+
+```text
+候选但未确认调用 / Planned or candidate only
+```
+
+### 2. Confirmed invocation evidence / 已确认调用证据
+
+A skill can be marked `Confirmed` only when there is concrete evidence such as:
+
+```text
+toolName: Skill
+status: success
+```
+
+or an equivalent visible skill load/invocation event that identifies the skill name and returns skill-specific output.
+
+Examples of valid confirmed evidence:
+
+```text
+Skill `impeccable` loaded and returned visual review rules.
+Skill `design-taste-frontend` loaded and returned design-engineering guidance.
+toolName: Skill -> skill-router loaded V3.4 routing rules.
+```
+
+Weak evidence is NOT enough:
+
+```text
+I followed diagnose-like reasoning.
+I checked completeness myself.
+I planned to use gstack later.
+The output looks like the skill's style.
+```
+
+These must be classified as `Inferred` or `Planned only`, not `Confirmed`.
+
+### 3. No self-upgrade from reasoning to invocation / 禁止把自己推理升级成调用
+
+The agent MUST NOT claim a skill was actually used just because it performed similar reasoning manually.
+
+Bad:
+
+```text
+Actual skills used: diagnose
+Reason: I read the code and found the bug myself.
+```
+
+Good:
+
+```text
+Confirmed skill calls: none
+Behavior-inferred skill guidance: diagnose-like debugging flow, but no visible diagnose skill invocation
+Violation: none if it was not claimed as confirmed
+```
+
+If the agent previously claimed `diagnose` was used but no invocation proof exists, mark:
+
+```text
+ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION
+```
+
+### 4. Stage gate close block must include proof levels / 阶段关闭块必须包含证据等级
+
+Every `ROUTER_STAGE_GATE: CLOSED` block MUST distinguish skill proof levels:
+
+```text
+ROUTER_STAGE_GATE: CLOSED
+Completed checkpoint: <checkpoint-name>
+Confirmed skill calls: <skills with visible invocation proof>
+Behavior-inferred skill guidance: <skills whose workflow was followed but not visibly invoked>
+Planned or candidate only: <skills mentioned but not confirmed>
+Unavailable / failed skills: <skill + reason>
+阶段证据：<files changed / tests run / browser QA / review notes / docs updated>
+Next required router checkpoint: <checkpoint-name or none>
+```
+
+Do NOT use a single ambiguous field like:
+
+```text
+本阶段实际使用 skills：diagnose, full-output-enforcement, gstack
+```
+
+unless every listed skill has confirmed invocation evidence.
+
+### 5. Final Stage Marker Ledger proof columns / 最终台账证据列
+
+The final `Stage Marker Ledger` MUST include these columns or equivalent bullet fields:
+
+```text
+- Checkpoint
+- Marker
+- Gate ID
+- Native todo item
+- Work cluster
+- Confirmed skill calls
+- Behavior-inferred skill guidance
+- Planned / candidate only
+- Unavailable / failed skills
+- Evidence
+- Violation
+```
+
+A good ledger row:
+
+```text
+Checkpoint: ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH
+Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-5
+Confirmed skill calls: impeccable
+Behavior-inferred skill guidance: none
+Planned / candidate only: ui-ux-pro-max
+Evidence: visual review notes + targeted CSS edits
+Violation: none
+```
+
+A bad ledger row:
+
+```text
+Skills Used: diagnose, full-output-enforcement, gstack
+Evidence: I checked the code manually
+```
+
+### 6. Skill claim audit before final answer / 最终回答前 Skill 声称审计
+
+Before the final response, the agent MUST audit every skill name that appears in:
+
+- candidate pools;
+- router passes;
+- stage close blocks;
+- completion summaries;
+- Stage Marker Ledger;
+- QA summaries.
+
+For each skill, ask:
+
+```text
+1. Did I visibly invoke/load this skill?
+2. Did the UI/tool log show `toolName: Skill` or equivalent skill output?
+3. If not, am I only inferring guidance or merely planning to use it?
+4. Did I accidentally list it under actual/confirmed usage?
+```
+
+If a skill is claimed as actual/confirmed without proof, the agent MUST either:
+
+1. move it to `Inferred` or `Planned only`; or
+2. mark the violation:
+
+```text
+ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION
+```
+
+### 7. gstack proof rule / gstack 调用证据规则
+
+`gstack` has stricter proof requirements because QA claims are often overclaimed.
+
+For `gstack` to be marked `Confirmed`, at least one of these must be true:
+
+1. `gstack` itself is visibly loaded/invoked through `toolName: Skill` or equivalent output;
+2. the assistant explicitly opens the top-level `gstack` skill and then runs browser QA through Chrome DevTools MCP;
+3. the final QA evidence includes real browser/MCP actions such as page open, screenshot, click, viewport check, or console check, and the ledger attributes it as `gstack（browser testing intent）+ Chrome DevTools MCP`.
+
+If `gstack` was only planned but no browser/MCP verification ran, classify it as `Planned only` or `Unavailable / failed`, not `Confirmed`.
+
+If the agent claims `gstack` browser QA but only performed static review, mark:
+
+```text
+ROUTER_VIOLATION: GSTACK_QA_CLAIM_WITHOUT_BROWSER_EVIDENCE
+ROUTER_VIOLATION: STATIC_QA_OVERCLAIM
+```
+
+### 8. Minimum honest summary / 最小诚实总结
+
+If skill invocation proof is uncertain, prefer a conservative statement:
+
+```text
+Confirmed skill calls: skill-router, impeccable
+Behavior-inferred skill guidance: diagnose-like debugging flow
+Planned only: full-output-enforcement
+Violation: none, because unconfirmed skills were not claimed as actual calls
+```
+
+Never inflate unconfirmed skill usage just to make the collaboration look stronger.
+
+
+## V3.4 Hard-Gate Patch / V3.4 硬闸门补丁
 
 This patch exists because weak agents often do this bad pattern:
 
 ```text
 Router Pass: ROUTER_CHECKPOINT_0_TASK_MAP
-Stage marker: ...V3.3-1
+Stage marker: ...V3.4-1
 后续 router checkpoints:
 - ROUTER_CHECKPOINT_2_PLANNING_OR_DESIGN
 - ROUTER_CHECKPOINT_3_IMPLEMENTATION
@@ -56,7 +283,7 @@ That is NOT compliant.
 
 ```text
 列出“后续 router checkpoints”不等于执行了这些 checkpoints。
-只有在进入某阶段之前，重新输出该阶段 Router Pass + 对应 V3.3-n marker，才算该阶段真的重新路由。
+只有在进入某阶段之前，重新输出该阶段 Router Pass + 对应 V3.4-n marker，才算该阶段真的重新路由。
 ```
 
 ### Hard-gated execution loop / 硬闸门执行循环
@@ -88,7 +315,7 @@ Before doing any meaningful work for a stage, output a gate block:
 ```text
 ROUTER_STAGE_GATE: OPEN
 Router Pass: <checkpoint-name>
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-<n>
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-<n>
 当前阶段：<stage>
 本阶段允许使用 skills：<only current-stage skills>
 本阶段禁止提前声称使用的后续 skills：<future-stage skills>
@@ -99,7 +326,9 @@ After finishing that stage, output or record a close block:
 ```text
 ROUTER_STAGE_GATE: CLOSED
 Completed checkpoint: <checkpoint-name>
-本阶段实际使用 skills：<skills actually used>
+Confirmed skill calls: <skills with invocation proof>
+Behavior-inferred skill guidance: <skills whose workflow was followed without visible invocation>
+Planned / candidate only: <skills mentioned but not confirmed>
 阶段证据：<files changed / tests run / review notes / browser QA / docs updated>
 Next required router checkpoint: <checkpoint-name or none>
 ```
@@ -124,10 +353,10 @@ Meaningful actions include:
 
 Therefore:
 
-- Before code edits, MUST run `ROUTER_CHECKPOINT_3_IMPLEMENTATION` and output `...V3.3-4`.
-- Before polish/review, MUST run `ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH` and output `...V3.3-5`.
-- Before tests/browser QA/final verification, MUST run `ROUTER_CHECKPOINT_5_QA_OR_VERIFICATION` and output `...V3.3-6`.
-- Before docs/handoff/final context summary, MUST run `ROUTER_CHECKPOINT_6_DOCUMENTATION_OR_HANDOFF` and output `...V3.3-7` when relevant.
+- Before code edits, MUST run `ROUTER_CHECKPOINT_3_IMPLEMENTATION` and output `...V3.4-4`.
+- Before polish/review, MUST run `ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH` and output `...V3.4-5`.
+- Before tests/browser QA/final verification, MUST run `ROUTER_CHECKPOINT_5_QA_OR_VERIFICATION` and output `...V3.4-6`.
+- Before docs/handoff/final context summary, MUST run `ROUTER_CHECKPOINT_6_DOCUMENTATION_OR_HANDOFF` and output `...V3.4-7` when relevant.
 
 ### Future checkpoint is not proof / 未来 checkpoint 不是证据
 
@@ -145,7 +374,7 @@ The checkpoint counts only when the agent later outputs the current-stage block,
 ```text
 ROUTER_STAGE_GATE: OPEN
 Router Pass: ROUTER_CHECKPOINT_3_IMPLEMENTATION
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-4
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-4
 当前阶段：实现阶段
 本阶段实际调用 / 使用 skills：
 - frontend-design: 前端实现
@@ -157,9 +386,9 @@ Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-4
 
 For a medium or complex task:
 
-- If only `...V3.3-1` appears, the agent MUST NOT claim multi-stage routing happened.
-- If implementation happened but `...V3.3-4` never appeared before implementation, mark it as a violation.
-- If QA/testing/browser checks happened but `...V3.3-6` never appeared before QA, mark it as a violation.
+- If only `...V3.4-1` appears, the agent MUST NOT claim multi-stage routing happened.
+- If implementation happened but `...V3.4-4` never appeared before implementation, mark it as a violation.
+- If QA/testing/browser checks happened but `...V3.4-6` never appeared before QA, mark it as a violation.
 - If final summary claims stages that have no markers, mark them as skipped or violation, not as completed.
 
 Use this exact violation marker when applicable:
@@ -179,17 +408,17 @@ ROUTER_VIOLATION: STAGE_WORK_WITHOUT_STAGE_ROUTER_PASS
 For complex tasks, the agent should normally produce at least these visible router passes unless the task ends early:
 
 ```text
-V3.3-1: task map
-V3.3-3: planning/design
-V3.3-4: implementation
-V3.3-5: review/polish
-V3.3-6: QA/verification
+V3.4-1: task map
+V3.4-3: planning/design
+V3.4-4: implementation
+V3.4-5: review/polish
+V3.4-6: QA/verification
 ```
 
 If the complex task includes docs, handoff, or skill work, also use:
 
 ```text
-V3.3-7: documentation/handoff
+V3.4-7: documentation/handoff
 ```
 
 If the agent produces fewer than 4 stage markers for a complex task, it MUST include:
@@ -202,11 +431,11 @@ If the agent produces fewer than 4 stage markers for a complex task, it MUST inc
 Weak reasons such as “I already planned it at the beginning” are invalid.
 
 
-## V3.3 UI Review / Polish Required Gate Patch / V3.3 用户界面抛光强制闸门补丁
+## V3.4 UI Review / Polish Required Gate Patch / V3.4 用户界面抛光强制闸门补丁
 
 This patch exists because V3.1 can already call multiple stage routers, but weak agents may still jump from implementation directly to QA for UI tasks.
 
-V3.3 fixes that by making `ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH` a **default required gate** for user-visible artifacts.
+V3.4 fixes that by making `ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH` a **default required gate** for user-visible artifacts.
 
 中文目标：
 
@@ -379,19 +608,19 @@ ROUTER_VIOLATION: UI_POLISH_GATE_MISSING_FROM_TODO
 For a simple-but-real UI task, the normal minimum visible markers are:
 
 ```text
-V3.3-1: task map
-V3.3-3: design/planning
-V3.3-4: implementation
-V3.3-5: review/polish
-V3.3-6: QA/verification
+V3.4-1: task map
+V3.4-3: design/planning
+V3.4-4: implementation
+V3.4-5: review/polish
+V3.4-6: QA/verification
 ```
 
-For a UI continuation / local visual tweak, the agent may skip V3.3-1 if it is already mid-task, but it should still normally produce:
+For a UI continuation / local visual tweak, the agent may skip V3.4-1 if it is already mid-task, but it should still normally produce:
 
 ```text
-V3.3-4: implementation
-V3.3-5: review/polish
-V3.3-6: QA/verification
+V3.4-4: implementation
+V3.4-5: review/polish
+V3.4-6: QA/verification
 ```
 
 and use resume mode instead of starting over.
@@ -422,11 +651,11 @@ ROUTER_VIOLATION: FINAL_LEDGER_MISSING_UI_POLISH_STAGE
 ```
 
 
-## V3.3 Native Todo Sync Gate Patch / V3.3 原生计划列表同步闸门补丁
+## V3.4 Native Todo Sync Gate Patch / V3.4 原生计划列表同步闸门补丁
 
 This patch exists because V3.2 can correctly create textual router gates, but some TRAE agents may not surface those gates in TRAE's native task plan / To-Do List UI.
 
-V3.3 makes router gates **native-todo-first** when the platform exposes a native todo / planning tool.
+V3.4 makes router gates **native-todo-first** when the platform exposes a native todo / planning tool.
 
 中文目标：
 
@@ -490,7 +719,7 @@ Then update the native todo list and continue.
 
 ### 4. Chat text is not enough / 聊天正文不算完整同步
 
-The following is not enough for V3.3 compliance:
+The following is not enough for V3.4 compliance:
 
 ```text
 动态路由绑定任务计划：
@@ -536,7 +765,7 @@ If native todo was unavailable, include the fallback reason.
 If neither is true, mark a router violation.
 
 
-## V3.3 Design Stage Skill Minimum Patch / V3.3 设计阶段最低 Skill 参与规则
+## V3.4 Design Stage Skill Minimum Patch / V3.4 设计阶段最低 Skill 参与规则
 
 This patch exists because weak agents may treat the design stage as ordinary model reasoning, producing:
 
@@ -596,7 +825,7 @@ For example, in design stage:
 - NOT OK: claiming `gstack` was used before browser QA
 
 
-## V3.3 QA Skill Attribution Consistency Patch / V3.3 QA Skill 归因一致性规则
+## V3.4 QA Skill Attribution Consistency Patch / V3.4 QA Skill 归因一致性规则
 
 This patch exists because agents may select `gstack`, then execute browser checks through Chrome DevTools MCP, and finally list only Chrome DevTools MCP in the ledger.
 
@@ -657,7 +886,7 @@ The final Stage Marker Ledger must distinguish:
 For QA, a good row looks like:
 
 ```text
-QA / Verification | V3.3-6 | gstack（browser testing intent）+ Chrome DevTools MCP | screenshots, clicks, viewport tests, console check
+QA / Verification | V3.4-6 | gstack（browser testing intent）+ Chrome DevTools MCP | screenshots, clicks, viewport tests, console check
 ```
 
 If the row says `gstack` was used but provides no browser/MCP/test evidence, mark:
@@ -673,7 +902,7 @@ ROUTER_VIOLATION: QA_ATTRIBUTION_INCONSISTENT
 ```
 
 
-## V3.3 Todo-Bound Dynamic Gate Patch / V3.3 任务列表绑定动态闸门补丁
+## V3.4 Todo-Bound Dynamic Gate Patch / V3.4 任务列表绑定动态闸门补丁
 
 This patch exists because weak agents often obey only the visible task plan / todo list. If router checkpoints are only written in prose, they are often ignored during execution.
 
@@ -806,7 +1035,7 @@ When this happens, keep the same official stage marker, but add a task-specific 
 ROUTER_STAGE_GATE: OPEN
 Router Pass: ROUTER_CHECKPOINT_3_IMPLEMENTATION
 Gate ID: implementation/pdf-download-bug
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-4
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-4
 当前阶段：实现 / 修复 PDF 下载链路
 本阶段允许使用 skills：diagnose, tdd, full-output-enforcement
 ```
@@ -817,7 +1046,7 @@ A later implementation gate could be:
 ROUTER_STAGE_GATE: OPEN
 Router Pass: ROUTER_CHECKPOINT_3_IMPLEMENTATION
 Gate ID: implementation/assessment-card-visual-upgrade
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-4
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-4
 当前阶段：实现 / 在线测评卡片视觉升级
 本阶段允许使用 skills：frontend-design, impeccable, design-taste-frontend, full-output-enforcement
 ```
@@ -869,9 +1098,10 @@ The agent MUST NOT count a future candidate as used.
 At the end of each gate, the close block must distinguish:
 
 ```text
-本阶段实际使用 skills：<actually used now>
-候选但未使用 skills：<considered but not used now>
-后续阶段可能使用 skills：<future only, not counted>
+Confirmed skill calls：<skills with visible invocation proof>
+Behavior-inferred skill guidance：<skills whose workflow was followed but not visibly invoked>
+Planned / candidate only：<skills considered, planned, or future-only>
+Unavailable / failed skills：<skill + reason>
 ```
 
 ### 9. Stage Marker Ledger must bind todos to markers / 阶段台账必须绑定 todo 与 marker
@@ -885,8 +1115,10 @@ Required fields:
 - Todo item: <exact router gate todo title>
   Checkpoint: <ROUTER_CHECKPOINT_x>
   Gate ID: <task-specific gate id>
-  Marker: <SKILL_ROUTER_APPLIED ... V3.3-n OR skipped/violation>
-  Current-stage skills actually used: <skills>
+  Marker: <SKILL_ROUTER_APPLIED ... V3.4-n OR skipped/violation>
+  Confirmed skill calls: <skills with invocation proof>
+  Behavior-inferred skill guidance: <skills whose workflow was followed without visible invocation>
+  Planned / candidate only: <skills mentioned but not confirmed>
   Work cluster protected by this gate: <work item>
   Evidence: <files changed / tests run / browser QA / review notes / docs updated>
 ```
@@ -909,7 +1141,7 @@ Then continue from the next unfinished work item.
 
 ### 11. Minimality without laziness / 不写死，也不偷懒
 
-V3.3 is middle-high aggressive, not template-driven, and stricter for user-facing UI/visual artifacts.
+V3.4 is middle-high aggressive, not template-driven, and stricter for user-facing UI/visual artifacts.
 
 Rules:
 
@@ -922,7 +1154,7 @@ Rules:
 - For trivial tasks, a single router pass may be enough, but explain why no additional gates are needed.
 
 
-## V3.3 Resume-Safe Router Patch / V3.3 防回退续跑补丁
+## V3.4 Resume-Safe Router Patch / V3.4 防回退续跑补丁
 
 This patch exists because weak agents may correctly add todo-bound router gates, but then make a new mistake:
 
@@ -1045,7 +1277,7 @@ ROUTER_RESUME_ANCHOR:
 ROUTER_STAGE_GATE: OPEN
 Router Pass: ROUTER_CHECKPOINT_5_QA_OR_VERIFICATION
 Gate ID: qa/full-regression-after-pdf-and-card-changes
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-6
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-6
 当前阶段允许使用 skills：gstack, diagnose, tdd
 ```
 
@@ -1104,7 +1336,7 @@ That reason is invalid for substantial UI work.
 
 Valid options:
 
-1. Run a real review/polish router gate and output `...V3.3-5`.
+1. Run a real review/polish router gate and output `...V3.4-5`.
 2. Mark review/polish as skipped only with a concrete reason, such as user time constraint, no UI/design changes, or unavailable required files.
 3. If review/polish was genuinely performed inside implementation, still output a close block that lists the concrete review evidence.
 
@@ -1182,17 +1414,31 @@ If the final ledger shows `ROUTER_CHECKPOINT_0_TASK_MAP` after 2+ completed work
 ROUTER_VIOLATION: MIDTASK_ROUTER_RESET_TO_TASK_MAP
 ```
 
-### 11. V3.3 recommended user-facing instruction / V3.3 推荐用户提示词
+### 11. V3.4 recommended user-facing instruction / V3.4 推荐用户提示词
 
 When the user wants strict multi-stage router behavior, the agent should understand this compact instruction:
 
 ```text
-请使用 skill-router 的 V3.3 Native-Todo-Synced UI-Polish-Required Resume-Safe Todo-Bound Hard-Gated 模式。
+请使用 skill-router 的 V3.4 Skill-Invocation-Proof Native-Todo-Synced UI-Polish-Required Resume-Safe Todo-Bound Hard-Gated 模式。
 每个 router gate 必须进入 todo list，且必须在对应业务工作前完成。
 如果任务已经完成到中途，后续 router recheck 必须使用 RESUME_FROM_CURRENT_PROGRESS，只为下一个未完成工作簇路由，禁止重新从 Router Pass 0 开始规划。
 已完成 todo 默认锁定，除非测试失败或用户改需求，否则不得回退。
 UI/浏览器/下载类任务不能用静态审查冒充完整 QA；gstack 或 Chrome MCP 失败时只能标记 PARTIAL QA。
 最终输出 Stage Marker Ledger，列出每个 gate 的 marker、实际 skills、todo 状态、证据、跳过原因和任何 violation。
+```
+
+
+### 12. V3.4 recommended user-facing instruction / V3.4 推荐用户提示词
+
+When the user wants strict V3.4 behavior, the agent should understand this compact instruction:
+
+```text
+请优先使用 skill-router V3.4 做分阶段动态路由。
+如果支持 TRAE 原生 Todo List，必须把 router gate 和实际工作项同步进去。
+不要只在开头调用一次 skill-router；每进入关键阶段前都要重新 router pass，并只选择当前阶段真正需要的 skills。
+最终必须输出 Stage Marker Ledger，并按 Confirmed / Inferred / Planned only / Unavailable failed 区分每个 skill 的调用证据等级。
+不要把没有 toolName: Skill 或明确 skill 加载输出的 skill 写成实际调用。
+如果声称使用了某个 skill 但没有调用证据，必须标记 ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION。
 ```
 
 
@@ -1257,10 +1503,13 @@ Before selecting or claiming any skill usage:
 9. MUST use skills for different roles, not duplicates of the same role.
 10. MUST re-run this router at stage boundaries instead of relying only on the first routing decision.
 11. MUST NOT carry over old first-pass decisions blindly. Every phase needs a fresh stage-local router pass.
+12. MUST distinguish `Confirmed`, `Inferred`, `Planned only`, and `Unavailable / failed` skill proof levels.
+13. MUST NOT list a skill as actually used unless there is invocation proof.
+14. MUST mark `ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION` when a claimed skill lacks invocation proof.
 
 ## Stage Verification Markers / 分阶段生效验证标记
 
-V3.3 uses **stage-specific verification markers**.
+V3.4 uses **stage-specific verification markers**.
 
 Do NOT use one generic marker to prove the whole task.
 Each marker proves that the router was actually invoked or rechecked for one specific stage.
@@ -1268,20 +1517,20 @@ Each marker proves that the router was actually invoked or rechecked for one spe
 Base proof token:
 
 ```text
-ROUTER_20260512_CN_GSTACK——V3.3
+ROUTER_20260512_CN_GSTACK——V3.4
 ```
 
 When this skill is used at a stage, include the exact stage marker for that stage.
 
 | Router checkpoint | Stage marker | What it proves |
 |---|---|---|
-| `ROUTER_CHECKPOINT_0_TASK_MAP` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-1` | Initial task mapping, complexity classification, candidate pool, and first-stage plan were produced. |
-| `ROUTER_CHECKPOINT_1_DISCOVERY` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-2` | Discovery / requirement-stage routing was actually run. |
-| `ROUTER_CHECKPOINT_2_PLANNING_OR_DESIGN` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-3` | Planning, architecture, or design-stage routing was actually run. |
-| `ROUTER_CHECKPOINT_3_IMPLEMENTATION` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-4` | Implementation-stage routing was actually run. |
-| `ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-5` | Review, critique, polish, or completeness-stage routing was actually run. |
-| `ROUTER_CHECKPOINT_5_QA_OR_VERIFICATION` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-6` | QA, testing, browser verification, or regression-stage routing was actually run. |
-| `ROUTER_CHECKPOINT_6_DOCUMENTATION_OR_HANDOFF` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-7` | Documentation, handoff, issue, PRD, or final context-preservation routing was actually run. |
+| `ROUTER_CHECKPOINT_0_TASK_MAP` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-1` | Initial task mapping, complexity classification, candidate pool, and first-stage plan were produced. |
+| `ROUTER_CHECKPOINT_1_DISCOVERY` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-2` | Discovery / requirement-stage routing was actually run. |
+| `ROUTER_CHECKPOINT_2_PLANNING_OR_DESIGN` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-3` | Planning, architecture, or design-stage routing was actually run. |
+| `ROUTER_CHECKPOINT_3_IMPLEMENTATION` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-4` | Implementation-stage routing was actually run. |
+| `ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-5` | Review, critique, polish, or completeness-stage routing was actually run. |
+| `ROUTER_CHECKPOINT_5_QA_OR_VERIFICATION` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-6` | QA, testing, browser verification, or regression-stage routing was actually run. |
+| `ROUTER_CHECKPOINT_6_DOCUMENTATION_OR_HANDOFF` | `SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-7` | Documentation, handoff, issue, PRD, or final context-preservation routing was actually run. |
 
 ### Marker rules
 
@@ -1314,11 +1563,13 @@ Append one block per stage router invocation:
 ```text
 === SKILL ROUTER TRACE ===
 Skill: skill-router
-Version: V3
+Version: V3.4
 Checkpoint: <checkpoint-name>
-StageMarker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-<n>
+StageMarker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-<n>
 Task: <one-line summary>
-StageSkills: <comma-separated skills actually used at this stage>
+StageSkillsConfirmed: <comma-separated confirmed skill calls at this stage>
+StageSkillsInferred: <comma-separated inferred skill guidance if any>
+StageSkillsPlannedOnly: <comma-separated planned-only skills if any>
 Skipped: <yes/no and reason if yes>
 === END TRACE ===
 ```
@@ -1469,7 +1720,7 @@ At each checkpoint, use this format:
 
 ```text
 Router Pass: <checkpoint-name>
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-<n>
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-<n>
 当前阶段：<stage>
 本阶段目标：<goal>
 本阶段候选 skills：
@@ -1489,7 +1740,7 @@ Use both the recheck marker and the corresponding stage verification marker in t
 
 ```text
 ROUTER_RECHECK_APPLIED: <checkpoint-name>
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-<n>
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-<n>
 ```
 
 This does not replace real skill invocation when real invocation is possible. It is only a fallback for limited agents.
@@ -1708,7 +1959,7 @@ Chinese output pattern:
 
 ```text
 Router Pass: ROUTER_CHECKPOINT_0_TASK_MAP
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-1
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-1
 任务类型：<type>
 复杂度：<trivial/simple/medium/complex>
 Skill 候选池：
@@ -1770,7 +2021,7 @@ Before implementation, MUST run:
 
 ```text
 ROUTER_RECHECK_APPLIED: ROUTER_CHECKPOINT_3_IMPLEMENTATION
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-4
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-4
 ```
 
 or literally re-invoke this skill if the platform supports it.
@@ -1805,7 +2056,7 @@ After the first implementation pass, MUST run:
 
 ```text
 ROUTER_RECHECK_APPLIED: ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-5
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-5
 ```
 
 or literally re-invoke this skill.
@@ -1828,7 +2079,7 @@ Before verification, MUST run:
 
 ```text
 ROUTER_RECHECK_APPLIED: ROUTER_CHECKPOINT_5_QA_OR_VERIFICATION
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-6
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-6
 ```
 
 or literally re-invoke this skill.
@@ -1859,7 +2110,7 @@ After QA, if the task needs summary/docs/context preservation, run:
 
 ```text
 ROUTER_RECHECK_APPLIED: ROUTER_CHECKPOINT_6_DOCUMENTATION_OR_HANDOFF
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-7
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-7
 ```
 
 or literally re-invoke this skill.
@@ -2028,7 +2279,7 @@ This is NOT compliant for a complex task:
 
 ```text
 Router Pass: ROUTER_CHECKPOINT_0_TASK_MAP
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-1
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-1
 任务类型：UI 体验升级 + PDF 报告模板重构 + 下载链路 Bug 修复
 复杂度：complex
 
@@ -2057,9 +2308,11 @@ ROUTER_VIOLATION: ONLY_INITIAL_PASS_RAN
 ```text
 ROUTER_STAGE_GATE: OPEN
 Router Pass: ROUTER_CHECKPOINT_0_TASK_MAP
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-1
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-1
 当前阶段：任务映射
-本阶段实际使用 skills：skill-router
+Confirmed skill calls：skill-router
+Behavior-inferred skill guidance：none
+Planned / candidate only：none
 ROUTER_STAGE_GATE: CLOSED
 Next required router checkpoint: ROUTER_CHECKPOINT_2_PLANNING_OR_DESIGN
 ```
@@ -2069,9 +2322,11 @@ Before design work:
 ```text
 ROUTER_STAGE_GATE: OPEN
 Router Pass: ROUTER_CHECKPOINT_2_PLANNING_OR_DESIGN
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-3
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-3
 当前阶段：设计 / 架构 / UI 方向
-本阶段实际使用 skills：design-taste-frontend, ui-ux-pro-max, high-end-visual-design
+Confirmed skill calls：design-taste-frontend, ui-ux-pro-max, high-end-visual-design
+Behavior-inferred skill guidance：none
+Planned / candidate only：future implementation / QA skills
 ROUTER_STAGE_GATE: CLOSED
 Next required router checkpoint: ROUTER_CHECKPOINT_3_IMPLEMENTATION
 ```
@@ -2081,9 +2336,11 @@ Before code work:
 ```text
 ROUTER_STAGE_GATE: OPEN
 Router Pass: ROUTER_CHECKPOINT_3_IMPLEMENTATION
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-4
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-4
 当前阶段：实现
-本阶段实际使用 skills：frontend-design, diagnose, full-output-enforcement
+Confirmed skill calls：frontend-design, diagnose, full-output-enforcement
+Behavior-inferred skill guidance：none
+Planned / candidate only：future QA skills
 ROUTER_STAGE_GATE: CLOSED
 Next required router checkpoint: ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH
 ```
@@ -2093,9 +2350,11 @@ Before QA:
 ```text
 ROUTER_STAGE_GATE: OPEN
 Router Pass: ROUTER_CHECKPOINT_5_QA_OR_VERIFICATION
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-6
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-6
 当前阶段：QA / 验证
-本阶段实际使用 skills：gstack, tdd, diagnose
+Confirmed skill calls：gstack（browser testing intent）+ Chrome DevTools MCP, tdd, diagnose
+Behavior-inferred skill guidance：none
+Planned / candidate only：none
 ROUTER_STAGE_GATE: CLOSED
 Next required router checkpoint: ROUTER_CHECKPOINT_6_DOCUMENTATION_OR_HANDOFF
 ```
@@ -2107,7 +2366,7 @@ Use this format at the beginning of every stage for non-trivial tasks:
 ```text
 ROUTER_STAGE_GATE: OPEN
 Router Pass: <checkpoint-name>
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-<n>
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-<n>
 当前阶段：<stage>
 本阶段目标：<goal>
 本阶段候选 skills：
@@ -2123,7 +2382,9 @@ Use this format after the stage work:
 ```text
 ROUTER_STAGE_GATE: CLOSED
 Completed checkpoint: <checkpoint-name>
-本阶段实际使用 skills：<skills actually used>
+Confirmed skill calls: <skills with invocation proof>
+Behavior-inferred skill guidance: <skills whose workflow was followed without visible invocation>
+Planned / candidate only: <skills mentioned but not confirmed>
 阶段证据：<evidence>
 Next required router checkpoint: <checkpoint-name or none>
 ```
@@ -2136,7 +2397,7 @@ When skills are requested or useful, start with a router pass block.
 
 ```text
 Router Pass: ROUTER_CHECKPOINT_0_TASK_MAP
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-1
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-1
 任务类型：<type>
 复杂度：<trivial/simple/medium/complex>
 协作强度：<low/medium/medium-high/high>
@@ -2161,7 +2422,7 @@ Skill 候选池：
 
 ```text
 Router Pass: <checkpoint-name>
-Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-<n>
+Stage marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-<n>
 当前阶段：<stage>
 本阶段目标：<goal>
 
@@ -2186,38 +2447,59 @@ Skill 使用总结：
 
 阶段调用台账 / Stage Marker Ledger:
 - ROUTER_CHECKPOINT_0_TASK_MAP
-  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-1
-  - 已使用 / 尝试使用 skills: <skills actually used in this stage>
+  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-1
+  - Confirmed skill calls: <skills with visible invocation proof>
+  - Behavior-inferred skill guidance: <skills followed without visible invocation>
+  - Planned / candidate only: <skills mentioned but not confirmed>
+  - Unavailable / failed skills: <skill + reason>
   - 阶段目标: <goal>
   - 验证方式: <evidence or notes>
 - ROUTER_CHECKPOINT_1_DISCOVERY
-  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-2 OR Stage skipped: <reason>
-  - 已使用 / 尝试使用 skills: <skills actually used in this stage>
+  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-2 OR Stage skipped: <reason>
+  - Confirmed skill calls: <skills with visible invocation proof>
+  - Behavior-inferred skill guidance: <skills followed without visible invocation>
+  - Planned / candidate only: <skills mentioned but not confirmed>
+  - Unavailable / failed skills: <skill + reason>
   - 阶段目标: <goal>
   - 验证方式: <evidence or notes>
 - ROUTER_CHECKPOINT_2_PLANNING_OR_DESIGN
-  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-3 OR Stage skipped: <reason>
-  - 已使用 / 尝试使用 skills: <skills actually used in this stage>
+  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-3 OR Stage skipped: <reason>
+  - Confirmed skill calls: <skills with visible invocation proof>
+  - Behavior-inferred skill guidance: <skills followed without visible invocation>
+  - Planned / candidate only: <skills mentioned but not confirmed>
+  - Unavailable / failed skills: <skill + reason>
   - 阶段目标: <goal>
   - 验证方式: <evidence or notes>
 - ROUTER_CHECKPOINT_3_IMPLEMENTATION
-  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-4 OR Stage skipped: <reason>
-  - 已使用 / 尝试使用 skills: <skills actually used in this stage>
+  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-4 OR Stage skipped: <reason>
+  - Confirmed skill calls: <skills with visible invocation proof>
+  - Behavior-inferred skill guidance: <skills followed without visible invocation>
+  - Planned / candidate only: <skills mentioned but not confirmed>
+  - Unavailable / failed skills: <skill + reason>
   - 阶段目标: <goal>
   - 验证方式: <evidence or notes>
 - ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH
-  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-5 OR Stage skipped: <reason>
-  - 已使用 / 尝试使用 skills: <skills actually used in this stage>
+  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-5 OR Stage skipped: <reason>
+  - Confirmed skill calls: <skills with visible invocation proof>
+  - Behavior-inferred skill guidance: <skills followed without visible invocation>
+  - Planned / candidate only: <skills mentioned but not confirmed>
+  - Unavailable / failed skills: <skill + reason>
   - 阶段目标: <goal>
   - 验证方式: <evidence or notes>
 - ROUTER_CHECKPOINT_5_QA_OR_VERIFICATION
-  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-6 OR Stage skipped: <reason>
-  - 已使用 / 尝试使用 skills: <skills actually used in this stage>
+  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-6 OR Stage skipped: <reason>
+  - Confirmed skill calls: <skills with visible invocation proof>
+  - Behavior-inferred skill guidance: <skills followed without visible invocation>
+  - Planned / candidate only: <skills mentioned but not confirmed>
+  - Unavailable / failed skills: <skill + reason>
   - 阶段目标: <goal>
   - 验证方式: <evidence or notes>
 - ROUTER_CHECKPOINT_6_DOCUMENTATION_OR_HANDOFF
-  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-7 OR Stage skipped: <reason>
-  - 已使用 / 尝试使用 skills: <skills actually used in this stage>
+  - Marker: SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-7 OR Stage skipped: <reason>
+  - Confirmed skill calls: <skills with visible invocation proof>
+  - Behavior-inferred skill guidance: <skills followed without visible invocation>
+  - Planned / candidate only: <skills mentioned but not confirmed>
+  - Unavailable / failed skills: <skill + reason>
   - 阶段目标: <goal>
   - 验证方式: <evidence or notes>
 
@@ -2283,7 +2565,7 @@ Then do this:
 14. Include the stage markers for every router checkpoint that actually ran. At minimum, if routing was used at the beginning, include:
 
 ```text
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-1
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-1
 ```
 
 Do not include markers for stages that did not happen.
@@ -2321,4 +2603,6 @@ Before finalizing any non-trivial task, verify:
 - [ ] I did not reuse a fixed todo pattern; the gates were derived from the actual work clusters.
 - [ ] Each major work item had a matching preceding router gate or a clear skipped/violation reason.
 - [ ] I did not include stage markers for skipped stages.
-- [ ] I listed the skills used at each stage in the final Stage Marker Ledger.
+- [ ] I listed skill proof levels for each stage in the final Stage Marker Ledger.
+- [ ] I did not list any skill as Confirmed unless there was invocation proof.
+- [ ] I marked SKILL_CLAIM_WITHOUT_INVOCATION when a claimed skill lacked proof.
