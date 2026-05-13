@@ -2,12 +2,14 @@
 
 [English Version](./README_EN.md)
 
-> 中文名：对 TRAE CN 国内模型的技能路由
+> 中文名：对 TRAE CN 国内模型的技能路由  
 > 一个面向 TRAE CN / 国内模型的多 Skill 分阶段路由、协同与审计方案。
 
 这个项目提供一个 `skill-router` 技能，用来帮助 TRAE CN 里的 AI Coder 更稳定地调用可用 skills。
 
-它的目标不是让模型“嘴上说用了 skill”，而是让模型在不同任务阶段真正重新路由、调用不同 skills、同步原生 Todo List，并在最后留下可审计的阶段台账。
+它的目标不是让模型“嘴上说用了 skill”，而是让模型在不同任务阶段重新路由、调用不同 skills、同步原生 Todo List，并在最后留下可审计的阶段台账。
+
+V3.4 在 V3.3 的 Native Todo Sync、UI Polish、QA Attribution 基础上，进一步加入 **Skill Invocation Proof**：最终台账必须区分 Confirmed / Inferred / Planned only / Unavailable failed，避免模型把“计划使用的 skill”冒充成“实际调用的 skill”。
 
 ## 目录
 
@@ -35,14 +37,19 @@
 
 ## 建议搭配 Prompt（通用版）
 
-```
-如果当前环境支持 TRAE 原生任务计划 / Todo List，请把你的 router gate 和实际工作项同步到原生计划列表里，不要只在聊天正文里写计划。
+```text
+请优先使用 skill-router V3.4 做分阶段动态路由。
 
-请根据当前任务的真实类型和阶段动态选择 skills，并在进入新的关键阶段前重新调用 skill-router。每次 router pass 只选择当前阶段真正需要的 skills，不要把后续阶段的 skill 当成已经使用过。
+如果支持 TRAE 原生 Todo List，必须把 router gate 和实际工作项同步进去。
 
-任务计划必须根据本次任务动态生成，不要套固定模板。不同任务可以有不同阶段，例如需求澄清、设计/规划、架构分析、实现、调试、测试、Review、视觉抛光、浏览器验证、文档更新、交接总结等。只有当任务确实涉及用户可见 UI、页面、PDF 视觉、dashboard、卡片、移动端界面或视觉设计时，才需要安排独立的视觉审查 / 抛光阶段；只有当任务确实需要真实页面或浏览器行为验证时，才需要安排浏览器 QA。
+不要只在开头调用一次 skill-router；每进入关键阶段前都要重新 router pass，并只选择当前阶段真正需要的 skills。
 
-不要只在开头调用一次 skill-router。不要只把后续 router checkpoints 写在聊天正文里。每个关键工作项前都应有对应的 router gate；如果支持原生 Todo List，应优先同步到原生 Todo List。
+最终必须输出 Stage Marker Ledger，并按 Confirmed / Inferred / Planned only / Unavailable failed 区分每个 skill 的调用证据等级。
+
+不要把没有 toolName: Skill 或明确 skill 加载输出的 skill 写成实际调用。
+
+如果声称使用了某个 skill 但没有调用证据，必须标记：
+ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION
 ```
 
 ---
@@ -63,7 +70,8 @@ Skill Router for TRAE CN Domestic Models/
 │   ├── SKILL-v3.md
 │   ├── SKILL-v3.1.md
 │   ├── SKILL-v3.2.md
-│   └── SKILL-v3.3.md
+│   ├── SKILL-v3.3.md
+│   └── SKILL-v3.4.md
 └── 样例展示/
     ├── 调用过程展示1.png
     ├── 调用过程展示2.png
@@ -75,23 +83,21 @@ Skill Router for TRAE CN Domestic Models/
 
 这是**真正要使用的 skill 文件夹**。
 
-里面现在放的已经是当前推荐的最新版：
+正式使用时，把当前推荐版本 V3.4 的内容放入：
 
 ```text
 skill-router/SKILL.md
 ```
 
-也就是当前这个文件夹里放的已经是最新版 `V3.3`，可以直接使用。
-
 ### `所有版本/`
 
-这里保存历史版本备份，方便回溯每一版的设计变化。
+这里保存历史版本备份，方便回溯每一版的设计变化。建议将 `SKILL-v3.4.md` 也放入此目录。
 
 ### `样例展示/`
 
 这里放实际运行截图、Todo List 截图、Stage Marker Ledger 截图、浏览器 QA 截图等。
 
-README 现在已经改成引用仓库里现有的图片文件。
+README 已经引用仓库里现有的图片文件。
 
 ---
 
@@ -129,26 +135,39 @@ README 现在已经改成引用仓库里现有的图片文件。
 
 这个示例补充展示了最终总结区块的另一种实际输出效果。
 
+V3.4 的最终台账应额外展示 Confirmed / Inferred / Planned only / Unavailable failed，用于区分真实调用、行为推断和仅计划使用的 skills。
+
 ---
 
 ## 为什么需要这个 skill-router？
 
-很多 AI Coder 有一个常见问题：
+这个项目来自我在 TRAE CN 国内模型里的真实使用困扰。
 
-1. 用户说：“优先调用你可用的 skills。”
-2. AI 开头调用一次 `skill-router`。
-3. 它列出几个“后续可能使用”的 skill。
-4. 然后整个任务都靠自己做。
-5. 最后总结时却说“多 skill 协同完成”。
+TRAE CN 里的国内模型并不是完全不会使用 skills，而是经常存在几个明显问题：
 
-这其实是假协同。
+1. **不主动调用 skills**  
+   很多任务明明适合调用 skills，模型却不会主动调用。用户必须在 prompt 里明确说“请优先调用可用 skills”“记得调用 skill-router”，它才更可能触发。
 
-这个项目的目标就是解决这种问题：
+2. **只在开头调用一次**  
+   即使用户明确提醒它使用 skills，模型也经常只在任务开始时调用一次 router。它会列出一堆“后续可能使用的 skills”，但真正进入实现、调试、抛光、QA、文档等阶段时，就不再重新调用。
 
-```text
-不要让模型只在开头调用一次 router。
-要让模型在不同阶段重新路由，并实际调用当前阶段该用的 skills。
-```
+3. **任务一复杂就偷懒**  
+   当任务规模变大、文件变多、阶段变多时，模型会倾向于少触发 skills。它会尽量压缩 skill 调用次数，甚至只调用一两个 skill，然后假装已经完成多 skill 协作。
+
+4. **把“计划使用”说成“已经使用”**  
+   模型常常在开头把未来阶段的 skills 写进计划里，最后总结时却把这些 skills 当成已经实际使用过。
+
+5. **不会按阶段换 skill**  
+   一个真实开发任务通常包含多个阶段：需求澄清、规划、实现、调试、Review、视觉抛光、QA、文档、交接。不同阶段需要不同 skills，但模型经常只用一套开头选好的 skills 贯穿到底。
+
+6. **调用真假难审计**  
+   模型可能声称使用了某些 skills，但 TRAE UI 的工具日志里并没有对应的 `toolName: Skill` 调用记录。V3.4 因此新增了 skill 调用证据等级，要求区分 Confirmed、Inferred、Planned only、Unavailable / failed。
+
+所以这个 `skill-router` 的目标不是简单地“帮模型选 skill”，而是让模型在任务开始时构建候选池，在关键阶段重新路由，尽量同步 TRAE 原生 Todo List，并在最终 Stage Marker Ledger 中标注每个 skill 的调用证据等级。
+
+一句话：
+
+> 这个项目是为了解决 TRAE CN 国内模型“懒得调用 skills、只调用一次、少调用、假调用、不会分阶段调用、调用真假难审计”的问题。
 
 ---
 
@@ -157,7 +176,7 @@ README 现在已经改成引用仓库里现有的图片文件。
 推荐使用：
 
 ```text
-SKILL-v3.3.md
+SKILL-v3.4.md
 ```
 
 正式使用时，它对应的生效文件就是：
@@ -166,23 +185,61 @@ SKILL-v3.3.md
 skill-router/SKILL.md
 ```
 
-也就是说，当前 `skill-router/` 文件夹里放的已经是最新版 V3.3。
+也就是说，当前推荐版本是 V3.4。正式使用时，应将 V3.4 内容放入 `skill-router/SKILL.md`。
 
 ---
 
 ## 核心能力
 
-这个 router 主要解决这些问题：
+这个 router 主要提供这些能力：
 
-- 防止模型编造不存在的 skill
-- 防止模型只开头调用一次 skill-router
-- 防止模型把未来阶段的 skill 提前说成“已使用”
-- 让模型按阶段重新选择 skills
-- 让不同 skills 形成专家团协作
-- 把 router gate 同步进 TRAE 原生 Todo List
-- 对 UI / PDF / 页面类任务强制加入 Review / Polish 阶段
-- 对 QA 阶段要求真实证据
-- 最终输出 Stage Marker Ledger，方便审计
+- **可用 skill 路由**  
+  根据当前任务，从真实 available skills 里选择合适的 skills。
+
+- **防止虚构 skill**  
+  不允许模型编造不存在的 skill 名称，也不允许声称使用了不存在的 skill。
+
+- **多 skill 专家团协作**  
+  不再默认找最少 skill，而是根据任务复杂度组织规划、实现、调试、抛光、QA、文档等不同角色的 skill 协作。
+
+- **分阶段重新路由**  
+  不允许只在任务开头调用一次。在实现、调试、Review、QA、文档等关键阶段前，需要重新调用 skill-router。
+
+- **阶段化验证 marker**  
+  每个阶段都有独立 marker，例如 `V3.4-1`、`V3.4-3`、`V3.4-4`、`V3.4-5`、`V3.4-6`，方便判断它到底有没有重新路由。
+
+- **Todo-Bound Gates**  
+  router gate 不能只写在聊天正文里，而应绑定到任务计划 / Todo List。
+
+- **TRAE 原生 Todo List 同步**  
+  如果当前环境支持 TRAE 原生任务计划 / Todo List，必须优先把 router gate 和实际 work item 同步进去。
+
+- **Resume-Safe 续跑**  
+  中途重新路由时，不允许从头规划旧任务。应该识别已完成事项，只为当前未完成工作簇重新路由。
+
+- **UI Review / Polish 强制闸门**  
+  对网页、dashboard、PDF 首页、卡片、移动端页面等用户可见产物，默认要求在实现后、QA 前做一轮视觉审查与小范围抛光。
+
+- **QA 证据约束**  
+  不允许用静态代码审查冒充浏览器 QA。如果使用 `gstack` 和 Chrome DevTools MCP，应在最终台账里明确写成：  
+  `gstack（browser testing intent）+ Chrome DevTools MCP`
+
+- **Skill 调用证据等级审计（V3.4 新增）**  
+  每个 skill 必须标注证据等级：
+  - Confirmed：TRAE UI 明确出现 `toolName: Skill` 或有明确 skill 加载输出
+  - Inferred：UI 未显示调用，但行为明显受该 skill 规则指导
+  - Planned only：只是计划/候选，不能算实际使用
+  - Unavailable / failed：想用但不可用或调用失败
+
+- **防止伪造 Actual skills used（V3.4 新增）**  
+  不允许把 Planned only 写成 Actual skills used。如果某个 skill 被声称使用但没有调用证据，必须标记：  
+  `ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION`
+
+- **创建 / 改进 / 验证 skill 的特殊流程**  
+  当用户想创建新 skill 时，不会直接开写，而是先澄清需求、搜索现成 skill、判断安装还是创建，再用 `skill-creator` 或标准 `SKILL.md` 流程创建，并加入调用验证和测试流程。
+
+- **Stage Marker Ledger 最终台账**  
+  最后输出每个阶段的 marker、实际使用 skills、证据等级、跳过原因和验证方式，方便用户审计。
 
 ---
 
@@ -199,6 +256,8 @@ V1 是最初版本，主要能力是：
 - 加入基础验证标记
 - 支持创建、查找、安装、验证 skill 的特殊流程
 
+V1 已经包含“创建新 skill”的特殊流程：先澄清需求，再用 `find-skills` 搜索现成 skill，没有合适方案时再用 `skill-creator` 或标准 `SKILL.md` 手动创建，并要求加入调用验证和测试步骤。
+
 局限：
 
 - 逻辑偏保守
@@ -209,17 +268,7 @@ V1 是最初版本，主要能力是：
 
 ### V2：多 Skill 专家团协作
 
-V2 的核心变化是从：
-
-```text
-找最少够用的 skills
-```
-
-改成：
-
-```text
-组建多 skill 专家团
-```
+V2 的核心变化是从“找最少够用的 skills”改成“组建多 skill 专家团”。
 
 主要增强：
 
@@ -229,15 +278,6 @@ V2 的核心变化是从：
 - 要求最终输出 Stage Marker Ledger
 - 强调每个阶段只选择当前阶段真正需要的 skills
 - 鼓励中高激进度的多阶段协作
-
-示例 marker：
-
-```text
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V2-1
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V2-3
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V2-4
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V2-6
-```
 
 局限：
 
@@ -251,24 +291,12 @@ V3 开始把 router gate 和任务计划绑定。
 
 主要增强：
 
-- 加入 `ROUTER_STAGE_GATE: OPEN`
-- 加入 `ROUTER_STAGE_GATE: CLOSED`
+- 加入 `ROUTER_STAGE_GATE: OPEN / CLOSED`
 - 要求每个关键阶段开始前必须打开对应 gate
 - 要求 router checkpoint 写入任务计划 / todo list
 - 引入动态 checkpoint 生成算法
 - 禁止使用固定 todo 模板套所有任务
 - 禁止把“后续 checkpoint”当成已执行证据
-
-核心执行循环：
-
-```text
-1. ROUTE_CURRENT_STAGE
-2. OPEN_STAGE_GATE
-3. DO_ONLY_THIS_STAGE_WORK
-4. CLOSE_STAGE_GATE_WITH_EVIDENCE
-5. RECHECK_NEXT_STAGE
-6. Repeat until finalization
-```
 
 局限：
 
@@ -294,12 +322,6 @@ V3.1 解决的是“中途重新路由时从头开始”的问题。
 ROUTER_RECHECK_MODE: RESUME_FROM_CURRENT_PROGRESS
 ```
 
-典型违规：
-
-```text
-ROUTER_VIOLATION: MIDTASK_ROUTER_RESET_TO_TASK_MAP
-```
-
 局限：
 
 - UI 类任务仍可能从实现阶段直接跳到 QA，缺少独立视觉审查
@@ -310,21 +332,7 @@ ROUTER_VIOLATION: MIDTASK_ROUTER_RESET_TO_TASK_MAP
 
 V3.2 增加了用户可见产物的抛光阶段。
 
-只要任务涉及：
-
-- 网页
-- landing page
-- dashboard
-- 表单
-- 卡片 UI
-- 移动端页面
-- PDF 首页
-- PDF 报告布局
-- 报告封面
-- 视觉重构
-- 字体、间距、层级、颜色、响应式
-
-就默认必须进入：
+只要任务涉及网页、landing page、dashboard、表单、卡片 UI、移动端页面、PDF 首页、PDF 报告布局、报告封面、视觉重构、字体、间距、层级、颜色、响应式，就默认必须进入：
 
 ```text
 ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH
@@ -336,20 +344,6 @@ UI 类任务默认链路变成：
 TASK_MAP -> DESIGN/PLANNING -> IMPLEMENTATION -> REVIEW/POLISH -> QA/VERIFICATION
 ```
 
-为什么要加这个？
-
-因为 QA 只能证明：
-
-```text
-能不能跑，能不能点，有没有明显错误
-```
-
-但 Review / Polish 负责：
-
-```text
-好不好看，层级是否清楚，间距是否舒服，是否像成品
-```
-
 局限：
 
 - 设计阶段仍可能没有实际调用设计类 skill
@@ -359,35 +353,13 @@ TASK_MAP -> DESIGN/PLANNING -> IMPLEMENTATION -> REVIEW/POLISH -> QA/VERIFICATIO
 
 ### V3.3：Native Todo Sync + 设计 Skill 最低要求 + QA 归因一致性
 
-V3.3 是当前推荐版本。
+V3.3 继续保留并强化了创建 / 修改 / 安装 / 验证 skill 的流程，并将这类任务视为高密度 skill 任务，通常需要 `find-skills`、`skill-creator`、`prompt-lookup`、`full-output-enforcement`、`handoff` 等多个 skills 分阶段协作。
 
 主要增强：
 
-1. **Native Todo Sync Gate**
-
-   如果 TRAE 环境支持原生 Todo List / 任务计划，router gate 和 work item 必须同步进去。
-
-   只在聊天正文里写 gate，不算完整 todo-bound。
-2. **Design Stage Skill Minimum**
-
-   对 UI、前端、PDF layout、dashboard、landing page、report cover 等视觉任务，设计阶段默认至少使用一个设计类 skill。
-
-   推荐设计类 skills：
-
-   ```text
-   design-taste-frontend
-   ui-ux-pro-max
-   impeccable
-   high-end-visual-design
-   minimalist-ui（仅当风格匹配）
-   ```
-3. **QA Skill Attribution Consistency**
-
-   如果 QA 阶段选择了 `gstack`，底层使用 Chrome DevTools MCP，那么最终台账必须写成：
-
-   ```text
-   gstack（browser testing intent）+ Chrome DevTools MCP
-   ```
+1. **Native Todo Sync Gate**：如果 TRAE 环境支持原生 Todo List / 任务计划，router gate 和 work item 必须同步进去。只在聊天正文里写 gate，不算完整 todo-bound。
+2. **Design Stage Skill Minimum**：对 UI、前端、PDF layout、dashboard、landing page、report cover 等视觉任务，设计阶段默认至少使用一个设计类 skill。
+3. **QA Skill Attribution Consistency**：如果 QA 阶段选择了 `gstack`，底层使用 Chrome DevTools MCP，那么最终台账必须写成 `gstack（browser testing intent）+ Chrome DevTools MCP`。
 
 V3.3 解决了两个实际问题：
 
@@ -396,11 +368,47 @@ V3.3 解决了两个实际问题：
 
 ---
 
+### V3.4：Skill Invocation Proof / 调用证据等级审计
+
+V3.4 解决的是 V3.3 暴露出的一个关键问题：
+
+模型可能已经分阶段路由，也同步了 Todo List，但仍然会在最终台账里把“计划使用的 skill”写成“实际调用的 skill”。
+
+例如：
+
+- `diagnose` 只是被写进计划，但没有真实调用；
+- `full-output-enforcement` 只是作为候选出现，但没有真实调用；
+- `gstack` 被声称用于 QA，但没有浏览器 / MCP / `toolName: Skill` 证据。
+
+V3.4 新增 **Skill Invocation Proof**，要求每个 skill 都必须标注调用证据等级：
+
+```text
+Confirmed：TRAE UI 明确出现 toolName: Skill 或有明确 skill 加载输出
+Inferred：UI 未显示调用，但行为明显受该 skill 规则指导
+Planned only：只是计划/候选，不能算实际使用
+Unavailable / failed：想用但不可用或调用失败
+```
+
+V3.4 的核心规则：
+
+```text
+不要把没有 toolName: Skill 或明确 skill 加载输出的 skill 写成实际调用。
+
+如果声称使用了某个 skill 但没有调用证据，必须标记：
+ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION
+```
+
+一句话：
+
+> V3.3 解决“有没有分阶段协同”；V3.4 解决“到底哪些 skill 真调用了”。
+
+---
+
 ## 后续优化方向
 
-### V3.3.1：QA Evidence Precision Rule
+### 未来方向：QA Evidence Precision Rule
 
-V3.3 已经可用，但 QA 证据还可以更精确。
+V3.4 已经能区分 skill 调用证据等级，但 QA 证据还可以更精确。
 
 例如响应式检查里，如果模型只看：
 
@@ -416,13 +424,7 @@ overflowX
 document.documentElement.scrollWidth <= document.documentElement.clientWidth
 ```
 
-建议后续加入规则：
-
-```text
-当模型声称“移动端无横向滚动 / 无水平溢出”时，必须用 scrollWidth 和 clientWidth 做真实布局宽度判断，而不是只看 CSS overflow 值。
-```
-
-这不是 V3.3 的阻塞问题，但可以让 QA 证据更扎实。
+未来可以要求模型在声称“移动端无横向滚动 / 无水平溢出”时，用真实布局宽度判断，而不是只看 CSS overflow 值。
 
 ---
 
@@ -430,16 +432,16 @@ document.documentElement.scrollWidth <= document.documentElement.clientWidth
 
 ### 1. 当前最新版位置
 
-当前仓库里已经放好的最新版就在：
+正式使用文件应位于：
 
 ```text
 skill-router/SKILL.md
 ```
 
-历史版本 `V3.3` 备份位于：
+历史版本 `V3.4` 建议备份于：
 
 ```text
-所有版本/SKILL-v3.3.md
+所有版本/SKILL-v3.4.md
 ```
 
 ### 2. 确认 skill 名称
@@ -449,7 +451,7 @@ skill-router/SKILL.md
 ```yaml
 ---
 name: skill-router
-description: "中文/English Skill Router V3.3 ..."
+description: "中文/English Skill Router V3.4 ..."
 ---
 ```
 
@@ -488,51 +490,48 @@ skill-router
 更强一点的触发语：
 
 ```text
-请使用 skill-router 的 V3.3 Native Todo Sync 模式。
+请使用 skill-router 的 V3.4 Skill Invocation Proof 模式。
 如果当前环境支持 TRAE 原生任务计划 / Todo List，请把 router gate 和实际 work item 同步到原生计划列表里。
 不要只在开头调用一次 skill-router。
+最终输出 Stage Marker Ledger，并区分 Confirmed / Inferred / Planned only / Unavailable failed。
 ```
 
 ---
 
 ## 推荐测试 Prompt
 
-### 测试 V3.3 原生 Todo List + 多阶段协作
+### 测试 V3.4 原生 Todo List + 多阶段协作 + 调用证据审计
 
 ```text
 请新建一个完全独立的小 demo，不要修改我现有项目代码。
 
-任务：做一个单页网页 demo，主题是「赛博天气控制台 Cyber Weather Console」。
+任务：做一个 LOVE 主题的小型展示页。
 
 要求：
-1. 新建独立目录。
-2. 使用 HTML、CSS、JavaScript。
-3. 包含 hero、当前天气状态卡片、未来 4 小时预报、空气质量 / 风速 / 湿度 / 紫外线数据面板、切换城市按钮。
-4. 视觉风格：深色科技仪表盘、蓝紫霓虹、高级但克制。
-5. 页面要响应式，桌面、平板、手机都能正常查看。
-6. 完成后打开页面验证按钮交互、页面显示变化、响应式布局和控制台错误。
+1. 新建独立目录：skill-router-test-love-page/
+2. 使用 HTML、CSS、JavaScript，不要引入复杂框架。
+3. 页面需要包含：温柔 hero 区域、3 张 LOVE 主题卡片、一个“爱的瞬间”时间线、一个按钮，点击后随机显示一句简短的 love message。
+4. 视觉风格：温柔、干净、有氛围感，不要土味，不要太花。
+5. 页面要响应式，手机和桌面都能正常查看。
+6. 不要写占位符，不要只写伪代码，文件要能直接打开运行。
+7. 完成后请打开页面检查按钮交互、响应式布局和控制台错误。
 
-请优先调用你当前可用的 skill-router 和合适的 available skills 来辅助完成。
-
-如果当前环境支持 TRAE 原生任务计划 / Todo List，请把 router gate 和实际工作项同步到原生计划列表里，不要只在聊天正文里写计划。
-
-请根据真实任务阶段合理使用 skills：先规划视觉和结构，再实现，再做一轮视觉审查和小范围抛光，最后进行浏览器验证。
+请优先使用 skill-router V3.4 做分阶段动态路由，并在最终 Stage Marker Ledger 中区分 Confirmed / Inferred / Planned only / Unavailable failed。
 ```
 
 预期表现：
 
 - TRAE 原生 Todo List 被更新
-- 设计阶段实际调用设计类 skill
-- 实现阶段调用前端实现类 skill
-- 实现后进入 Review / Polish
-- QA 阶段使用 `gstack（browser testing intent）+ Chrome DevTools MCP`
+- 设计、实现、Review / Polish、QA 阶段按需出现
 - 最终有 Stage Marker Ledger
+- 每个 skill 都有 Confirmed / Inferred / Planned only / Unavailable failed 证据等级
+- Planned only 不会被写成 Actual skills used
 
 ---
 
 ## 如何判断是否合格
 
-一个合格的运行应该看到：
+一个合格的运行通常应该看到：
 
 ```text
 ROUTER_CHECKPOINT_0_TASK_MAP
@@ -545,11 +544,11 @@ ROUTER_CHECKPOINT_5_QA_OR_VERIFICATION
 并且看到类似 marker：
 
 ```text
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-1
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-3
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-4
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-5
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-6
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-1
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-3
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-4
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-5
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-6
 ```
 
 最终还应该有：
@@ -558,7 +557,15 @@ SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-6
 Stage Marker Ledger
 ```
 
-并列出每个阶段实际使用了哪些 skills。
+并列出：
+
+```text
+Confirmed skill calls
+Behavior-inferred skill guidance
+Planned only
+Unavailable / failed
+Violation
+```
 
 ---
 
@@ -573,9 +580,7 @@ Router Pass: ROUTER_CHECKPOINT_0_TASK_MAP
 - QA
 ```
 
-然后直接做完整个任务。
-
-这是不合格。
+然后直接做完整个任务。这是不合格。
 
 ### UI 任务跳过抛光
 
@@ -587,22 +592,13 @@ Router Pass: ROUTER_CHECKPOINT_0_TASK_MAP
 
 ### 只写聊天计划，不同步原生 Todo
 
-如果当前 TRAE 支持原生 Todo List，但模型只在聊天正文写：
-
-```text
-ROUTER_GATE ...
-WORK ...
-```
-
-却没有触发原生 Todo List 更新，那不算完整合格。
+如果当前 TRAE 支持原生 Todo List，但模型只在聊天正文写 `ROUTER_GATE ... WORK ...`，却没有触发原生 Todo List 更新，那不算完整合格。
 
 ### QA 冒充
 
 ```text
 静态代码审查通过，所以浏览器 QA 通过
 ```
-
-这是不合格。
 
 静态审查不能冒充浏览器 QA。
 
@@ -614,10 +610,25 @@ WORK ...
 gstack（browser testing intent）+ Chrome DevTools MCP
 ```
 
-而不是只写：
+而不是只写 `Chrome DevTools MCP`。
+
+### 声称使用 skill，但没有调用证据
+
+不合格：
 
 ```text
-Chrome DevTools MCP
+Actual skills used: diagnose, full-output-enforcement, gstack
+```
+
+但执行日志里没有对应的 `toolName: Skill` 或明确 skill 加载输出。
+
+V3.4 中应改为：
+
+```text
+Confirmed: skill-router, impeccable
+Planned only: diagnose, full-output-enforcement
+Unavailable / failed: gstack, if browser QA was attempted but failed
+Violation: ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION
 ```
 
 ---
@@ -652,25 +663,7 @@ skill-router/SKILL.md
 Available Skills Routing Table
 ```
 
-把里面的作者示例技能替换成你自己的技能。
-
-不要保留你环境里不存在的 skill。
-
-错误示例：
-
-```text
-frontend-design
-```
-
-如果你的环境没有这个 skill，就不能保留。
-
-正确示例：
-
-```text
-my-frontend-builder
-```
-
-前提是你的环境真的有这个 skill。
+把里面的作者示例技能替换成你自己的技能。不要保留你环境里不存在的 skill。
 
 ### 第三步：按阶段给你的 skills 分类
 
@@ -687,21 +680,15 @@ Documentation / Handoff
 Skill Creation / Skill Management
 ```
 
-每个 skill 至少写清楚：
-
-- skill 名称
-- 适用场景
-- 不适用场景
-- 属于哪个阶段
-- 和其他 skill 的分工区别
+每个 skill 至少写清楚：skill 名称、适用场景、不适用场景、属于哪个阶段、和其他 skill 的分工区别。
 
 示例：
 
-| 工程用途场景    | Skill 名称              | 所属 skill 包 | 用途判断                                 |
-| --------------- | ----------------------- | ------------- | ---------------------------------------- |
-| 前端 / 页面实现 | `my-frontend-builder` | `my-skills` | 用于创建完整页面、组件、dashboard。      |
-| UI / 抛光审查   | `my-ui-reviewer`      | `my-skills` | 用于实现后检查间距、层级、配色和响应式。 |
-| 浏览器 QA       | `my-browser-qa`       | `my-skills` | 用于打开页面、截图、点击、验证交互。     |
+| 工程用途场景 | Skill 名称 | 所属 skill 包 | 用途判断 |
+|---|---|---|---|
+| 前端 / 页面实现 | `my-frontend-builder` | `my-skills` | 用于创建完整页面、组件、dashboard。 |
+| UI / 抛光审查 | `my-ui-reviewer` | `my-skills` | 用于实现后检查间距、层级、配色和响应式。 |
+| 浏览器 QA | `my-browser-qa` | `my-skills` | 用于打开页面、截图、点击、验证交互。 |
 
 ### 第四步：替换阶段偏好规则
 
@@ -715,22 +702,7 @@ Preferred skills:
 - high-end-visual-design
 ```
 
-替换成你自己的设计类 skills：
-
-```text
-Preferred skills:
-- my-design-reviewer
-- my-ux-critic
-- my-visual-polisher
-```
-
-同理，也要替换：
-
-- implementation skills
-- debugging skills
-- QA skills
-- documentation / handoff skills
-- skill creation skills
+替换成你自己的设计类 skills。实现、调试、QA、文档、skill creation 等规则也应同步替换。
 
 ### 第五步：如果你没有 gstack
 
@@ -763,34 +735,24 @@ Never invent a skill.
 Never claim a skill was used unless it exists and was actually selected or invoked.
 Never claim future-stage skills were already used.
 Never claim browser QA passed unless browser QA actually ran.
+Never list Planned only skills as Actual skills used.
 ```
 
 这是整个 router 能被审计的基础。
 
 ### 第七步：自定义验证标记
 
-默认 V3.3 marker 是：
+默认 V3.4 marker 是：
 
 ```text
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-1
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-3
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-4
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-5
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-6
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-1
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-3
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-4
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-5
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-6
 ```
 
-你可以改成自己的项目 token，例如：
-
-```text
-SKILL_ROUTER_APPLIED: ROUTER_20260512_MY_SKILL_SET——V3.3-4
-```
-
-但必须全文件统一替换，包括：
-
-- marker 表
-- trace 规则
-- Stage Marker Ledger 示例
-- 违规判断中引用的 marker
+你可以改成自己的项目 token，但必须全文件统一替换，包括 marker 表、trace 规则、Stage Marker Ledger 示例、违规判断中引用的 marker。
 
 ---
 
@@ -809,7 +771,10 @@ ROUTER_VIOLATION: REVIEW_POLISH_REQUIRED_BUT_SKIPPED
 ROUTER_VIOLATION: QA_BEFORE_UI_POLISH_GATE
 ROUTER_VIOLATION: NATIVE_TODO_SYNC_SKIPPED
 ROUTER_VIOLATION: STATIC_QA_OVERCLAIM
+ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION
 ```
+
+`ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION` 用于：模型声称使用了某个 skill，但没有 `toolName: Skill`、明确 skill 加载输出或其他可审计调用证据。
 
 如果出现这些标记，说明本轮执行不完全合规。
 
@@ -827,34 +792,19 @@ ROUTER_VIOLATION: STATIC_QA_OVERCLAIM
 
 ### 3. 多 skill 协作，不是乱用 skill
 
-目标是：
-
-```text
-规划 skill + 实现 skill + 抛光 skill + QA skill
-```
-
-而不是：
-
-```text
-随便堆一堆 skill 名字
-```
+目标是“规划 skill + 实现 skill + 抛光 skill + QA skill”，不是随便堆 skill 名字。
 
 ### 4. 证据优先
 
-比起“我用了”，更重要的是：
-
-- 是否有 marker
-- 是否有 Todo List
-- 是否有文件改动
-- 是否有浏览器截图
-- 是否有测试结果
-- 是否有 Stage Marker Ledger
+比起“我用了”，更重要的是：marker、Todo List、文件改动、浏览器截图、测试结果、Stage Marker Ledger、调用证据等级。
 
 ### 5. 原生 Todo List 很重要
 
 很多模型更听官方任务计划，而不是聊天正文。
 
-所以 V3.3 要求尽量把 router gate 写进 TRAE 原生 Todo List。
+### 6. V3.4 的核心是可审计失败
+
+V3.4 不保证弱模型每次都真的调用所有该用的 skills，但它能让假调用、少调用、只计划不调用更容易暴露。
 
 ---
 
@@ -874,18 +824,9 @@ MIT License
 
 这个 router 是在 TRAE CN 国内模型实际使用中不断测试和修正出来的。
 
-它针对的不是理论问题，而是非常实际的模型偷懒行为：
+它针对的不是理论问题，而是非常实际的模型偷懒行为：只开头调用一次 router、skill 选得太少、假装后续 skill 已经使用、不同步原生 Todo List、UI 写完直接 QA、静态审查冒充浏览器 QA、中途重新从头规划、最终总结过度声明、Planned only 冒充 Actual skills used。
 
-- 只开头调用一次 router
-- skill 选得太少
-- 假装后续 skill 已经使用
-- 不同步原生 Todo List
-- UI 写完直接 QA
-- 静态审查冒充浏览器 QA
-- 中途重新从头规划
-- 最终总结过度声明
-
-如果你也遇到类似问题，可以直接使用 V3.3，或者根据自己的 available skills 改造成属于你自己的版本。
+如果你也遇到类似问题，可以直接使用 V3.4，或者根据自己的 available skills 改造成属于你自己的版本。
 
 ---
 
@@ -900,12 +841,14 @@ MIT License
 所有版本/SKILL-v3.1.md
 所有版本/SKILL-v3.2.md
 所有版本/SKILL-v3.3.md
+所有版本/SKILL-v3.4.md
 ```
 
 这样别人可以清楚看到这个 router 是如何一步步进化的。
 
 未来可能方向：
 
-- V3.3.1：更精确的 QA evidence，例如 `scrollWidth <= clientWidth`
-- V3.4：更强 trace file 审计
-- V4：可自动根据用户 available skills 生成专属路由表
+- 更精确的 QA evidence，例如 `scrollWidth <= clientWidth`
+- Skill 调用证据日志自动导出
+- 自动根据用户 available skills 生成专属路由表
+- 独立 `skill-router-auditor`，在任务结束后专门查账

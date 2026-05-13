@@ -2,19 +2,21 @@
 
 [中文版](./README.md)
 
-> Chinese name: Skill Routing for TRAE CN Domestic Models
+> Chinese name: Skill Routing for TRAE CN Domestic Models  
 > A staged, auditable, multi-skill routing, collaboration, and governance framework for TRAE CN / domestic models.
 
 This project provides a `skill-router` skill to help AI Coders in TRAE CN call available skills more reliably.
 
-Its goal is not to let the model merely say it used a skill, but to make it truly re-route across task stages, invoke the right skills at the right time, sync the native Todo List, and leave behind an auditable stage ledger.
+Its goal is not to let the model merely say it used a skill, but to make it re-route across task stages, invoke the right skills at the right time, sync the native Todo List, and leave behind an auditable stage ledger.
+
+V3.4 builds on V3.3 by adding **Skill Invocation Proof**: every skill in the final ledger must be classified as Confirmed, Inferred, Planned only, or Unavailable / failed, so planned skills cannot be falsely reported as actual calls.
 
 ## Table of Contents
 
 - [Suggested Companion Prompt (General Use)](#suggested-companion-prompt-general-use)
 - [Repository Structure](#repository-structure)
 - [Example Showcase](#example-showcase)
-- [Why is this skill-router needed?](#why-is-this-skill-router-needed)
+- [Why this skill-router exists](#why-this-skill-router-exists)
 - [Current Recommended Version](#current-recommended-version)
 - [Core Capabilities](#core-capabilities)
 - [Version Evolution](#version-evolution)
@@ -35,14 +37,19 @@ Its goal is not to let the model merely say it used a skill, but to make it trul
 
 ## Suggested Companion Prompt (General Use)
 
-```
-If the current environment supports TRAE's native task plan / Todo List, sync your router gates and actual work items into the native Todo List. Do not only write the plan in the chat message.
+```text
+Prioritize skill-router V3.4 for staged dynamic routing.
 
-Dynamically choose skills based on the real task type and the current task stage. Before entering any new key stage, re-run skill-router. Each router pass should select only the skills that are genuinely needed for the current stage. Do not treat future-stage skills as already used.
+If TRAE native Todo List is available, sync router gates and actual work items into it.
 
-The task plan must be generated dynamically for the current task. Do not reuse a fixed template. Different tasks may require different stages, such as requirement clarification, design/planning, architecture analysis, implementation, debugging, testing, review, visual polish, browser verification, documentation updates, and handoff summaries. Only add a dedicated visual review / polish stage when the task actually involves user-facing UI, webpages, PDF visuals, dashboards, cards, mobile screens, or visual design. Only add browser QA when the task actually requires real page behavior or browser-based verification.
+Do not call skill-router only once at the beginning. Before entering each key stage, run a new router pass and select only the skills genuinely needed for the current stage.
 
-Do not call skill-router only once at the beginning. Do not only list future router checkpoints in the chat message. Each key work item should have a corresponding router gate before it. If the native Todo List is available, sync router gates there first.
+The final answer must include a Stage Marker Ledger, and every skill must be labeled with an invocation evidence level: Confirmed / Inferred / Planned only / Unavailable failed.
+
+Do not list any skill as actually used unless there is `toolName: Skill` evidence or clear skill loading output.
+
+If a skill is claimed as used but has no invocation evidence, mark:
+ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION
 ```
 
 ---
@@ -63,7 +70,8 @@ Skill Router for TRAE CN Domestic Models/
 │   ├── SKILL-v3.md
 │   ├── SKILL-v3.1.md
 │   ├── SKILL-v3.2.md
-│   └── SKILL-v3.3.md
+│   ├── SKILL-v3.3.md
+│   └── SKILL-v3.4.md
 └── 样例展示/
     ├── 调用过程展示1.png
     ├── 调用过程展示2.png
@@ -75,29 +83,27 @@ Skill Router for TRAE CN Domestic Models/
 
 This is the **actual skill folder to use**.
 
-What is inside now is already the current recommended latest version:
+For real use, place the current recommended V3.4 content into:
 
 ```text
 skill-router/SKILL.md
 ```
 
-In other words, the file currently placed in this folder is already the latest `V3.3`, and it is ready to use directly.
-
 ### `所有版本/`
 
-This folder keeps historical versions so people can trace how the design evolved over time.
+This folder keeps historical versions so people can trace how the design evolved. It is recommended to keep `SKILL-v3.4.md` here as well.
 
 ### `样例展示/`
 
 This folder stores actual run screenshots, Todo List screenshots, Stage Marker Ledger screenshots, browser QA screenshots, and similar examples.
 
-The README now references the image files that already exist in this repository.
+The README references the image files that already exist in this repository.
 
 ---
 
 ## Example Showcase
 
-The screenshots below are the examples already included in the current repository.
+The screenshots below are examples already included in the current repository.
 
 ### Invocation Process Demo 1
 
@@ -129,26 +135,39 @@ This example mainly shows how final output can present stage results, skill usag
 
 This example provides another real output style for the final summary section.
 
+In V3.4, the final ledger should additionally show Confirmed / Inferred / Planned only / Unavailable failed to distinguish real calls, behavior-inferred guidance, and planned-only skills.
+
 ---
 
-## Why is this skill-router needed?
+## Why this skill-router exists
 
-Many AI Coders share a common problem:
+This project comes from real frustrations I encountered while using domestic models inside TRAE CN.
 
-1. The user says: "Prioritize the skills you actually have."
-2. The AI calls `skill-router` once at the beginning.
-3. It lists a few skills that it might use later.
-4. Then it completes the entire task by itself.
-5. In the final summary, it still claims "multi-skill collaboration."
+The issue is not that TRAE CN domestic models cannot use skills at all. The problem is that they often show several obvious failure patterns:
 
-That is fake collaboration.
+1. **They do not proactively call skills**  
+   Even when a task clearly fits certain skills, the model often does not call them on its own. The user usually has to explicitly say “please prioritize available skills” or “remember to call skill-router” before it is likely to trigger.
 
-This project exists to solve exactly that problem:
+2. **They call the router only once at the beginning**  
+   Even when reminded, the model often calls the router only once at task start. It may list “skills that might be used later,” but once the task moves into implementation, debugging, polish, QA, or documentation, it stops re-routing.
 
-```text
-Do not let the model call the router only once at the beginning.
-Make it re-route at different stages and actually invoke the skills needed for the current stage.
-```
+3. **They get lazy as task scale grows**  
+   As tasks become larger, touch more files, or involve more stages, the model tends to minimize skill calls. It may call only one or two skills and then pretend multi-skill collaboration happened.
+
+4. **They present planned usage as actual usage**  
+   Future-stage skills are often written into the plan and then later reported as if they were actually invoked.
+
+5. **They do not switch skills by stage**  
+   Real development tasks usually include requirement clarification, planning, implementation, debugging, review, visual polish, QA, documentation, and handoff. Different stages need different skills, but weaker agents often try to reuse the same first-pass skill set for the whole task.
+
+6. **Skill invocation is hard to audit**  
+   The model may claim that certain skills were used, while the TRAE UI log does not show corresponding `toolName: Skill` calls. V3.4 therefore adds invocation evidence levels: Confirmed, Inferred, Planned only, and Unavailable / failed.
+
+So this `skill-router` is not merely a “skill picker.” It is designed to make the model build a candidate pool, re-route at key stages, sync TRAE native Todo List when possible, and mark each skill’s invocation evidence level in the final Stage Marker Ledger.
+
+In one sentence:
+
+> This project exists to address TRAE CN domestic models being reluctant to call skills, calling them only once, calling too few, faking usage, failing to re-route by stage, and making skill invocation hard to audit.
 
 ---
 
@@ -157,7 +176,7 @@ Make it re-route at different stages and actually invoke the skills needed for t
 Recommended version:
 
 ```text
-SKILL-v3.3.md
+SKILL-v3.4.md
 ```
 
 For actual use, the effective file is:
@@ -166,23 +185,61 @@ For actual use, the effective file is:
 skill-router/SKILL.md
 ```
 
-That means the `skill-router/` folder currently already contains the latest V3.3 version.
+In other words, the current recommended version is V3.4. For real use, put the V3.4 content into `skill-router/SKILL.md`.
 
 ---
 
 ## Core Capabilities
 
-This router mainly solves the following problems:
+This router mainly provides the following capabilities:
 
-- prevents the model from inventing nonexistent skills
-- prevents the model from calling `skill-router` only once at the beginning
-- prevents the model from claiming future-stage skills were already used
-- makes the model re-select skills by stage
-- encourages expert-team style collaboration across multiple skills
-- syncs router gates into TRAE native Todo List
-- forces a Review / Polish stage for UI / PDF / page-type tasks
-- requires real evidence for QA
-- outputs a final Stage Marker Ledger for auditing
+- **Available-skill routing**  
+  Select appropriate skills for the current task from the real set of available skills.
+
+- **Prevention of invented skills**  
+  Prevent the model from inventing nonexistent skill names or claiming it used a skill that does not exist.
+
+- **Multi-skill expert-team collaboration**  
+  Instead of defaulting to the fewest possible skills, it organizes collaboration across planning, implementation, debugging, polish, QA, documentation, and other roles.
+
+- **Stage-by-stage re-routing**  
+  Do not allow a single router call only at task start. The model should re-route before key stages such as implementation, debugging, review, QA, and documentation.
+
+- **Stage validation markers**  
+  Each stage has independent markers such as `V3.4-1`, `V3.4-3`, `V3.4-4`, `V3.4-5`, and `V3.4-6`.
+
+- **Todo-Bound Gates**  
+  Router gates should not exist only in chat. They should be bound to the task plan / Todo List.
+
+- **TRAE native Todo List sync**  
+  If the current environment supports TRAE native task planning / Todo List, router gates and actual work items must be synced there first.
+
+- **Resume-Safe continuation**  
+  When re-routing mid-task, the model should not restart from scratch. It should recognize completed work and re-route only for the current unfinished work cluster.
+
+- **Required UI Review / Polish gate**  
+  For user-visible outputs such as webpages, dashboards, PDF covers, cards, and mobile screens, the default expectation is a visual review and small-scope polish pass after implementation and before QA.
+
+- **QA evidence constraints**  
+  Static code review must not pretend to be browser QA. If `gstack` and Chrome DevTools MCP are used, the final ledger should explicitly write:  
+  `gstack (browser testing intent) + Chrome DevTools MCP`
+
+- **Skill invocation evidence audit (new in V3.4)**  
+  Every skill must be labeled with an evidence level:
+  - Confirmed: TRAE UI explicitly shows `toolName: Skill`, or there is clear skill loading output
+  - Inferred: the UI does not show a skill call, but the behavior clearly follows that skill’s rules
+  - Planned only: the skill was only planned or listed as a candidate and must not be counted as actually used
+  - Unavailable / failed: the skill was intended but unavailable or failed
+
+- **Prevention of fake Actual skills used (new in V3.4)**  
+  Planned only skills must not be listed as Actual skills used. If a skill is claimed as used but has no invocation evidence, mark:  
+  `ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION`
+
+- **Special workflow for creating / improving / validating skills**  
+  When the user wants to create a new skill, the model should first clarify requirements, search for existing skills, decide whether to install or create, then use `skill-creator` or a standard `SKILL.md` flow, and include invocation validation and testing.
+
+- **Final Stage Marker Ledger**  
+  The final output should include each stage’s marker, actual skills, evidence level, skip reasons, and validation method so the user can audit the work.
 
 ---
 
@@ -199,49 +256,32 @@ V1 was the initial version. Its main capabilities were:
 - adding a basic verification marker
 - supporting special flows for creating, finding, installing, and validating skills
 
+V1 already included a special workflow for creating a new skill: clarify the requirement, search for an existing option with `find-skills`, and only create a new skill manually with `skill-creator` or a standard `SKILL.md` flow if nothing suitable exists.
+
 Limitations:
 
-- logic was relatively conservative
-- default tendency was to choose only 1-3 skills
-- it could easily route only once at task start
+- relatively conservative logic
+- default tendency to choose only 1-3 skills
+- easy to route only once at task start
 
 ---
 
 ### V2: Multi-Skill Expert Collaboration
 
-The core change in V2 was moving from:
-
-```text
-find the minimum number of skills needed
-```
-
-to:
-
-```text
-assemble a multi-skill expert team
-```
+V2 moved from “find the minimum number of skills needed” to “assemble a multi-skill expert team.”
 
 Main improvements:
 
 - introduced multi-skill collaboration
 - expanded the candidate pool
 - added stage markers
-- required the final output to include a Stage Marker Ledger
-- emphasized selecting only the truly needed skills for the current stage
+- required a final Stage Marker Ledger
+- emphasized selecting only the skills truly needed for the current stage
 - encouraged medium-to-high assertiveness in staged collaboration
 
-Example markers:
+Limitation:
 
-```text
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V2-1
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V2-3
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V2-4
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V2-6
-```
-
-Limitations:
-
-- weaker models could still list later checkpoints without actually executing them
+- weaker models could still list future checkpoints without actually executing them
 
 ---
 
@@ -251,42 +291,30 @@ V3 began binding router gates to the task plan.
 
 Main improvements:
 
-- added `ROUTER_STAGE_GATE: OPEN`
-- added `ROUTER_STAGE_GATE: CLOSED`
-- required the relevant gate to be opened before each key stage
+- added `ROUTER_STAGE_GATE: OPEN / CLOSED`
+- required the relevant gate to open before each key stage
 - required router checkpoints to be written into the task plan / todo list
 - introduced a dynamic checkpoint generation algorithm
-- disallowed using one fixed todo template for every task
-- disallowed treating "future checkpoints" as proof of execution
+- disallowed using a fixed todo template for every task
+- disallowed treating “future checkpoints” as proof of execution
 
-Core execution loop:
+Limitation:
 
-```text
-1. ROUTE_CURRENT_STAGE
-2. OPEN_STAGE_GATE
-3. DO_ONLY_THIS_STAGE_WORK
-4. CLOSE_STAGE_GATE_WITH_EVIDENCE
-5. RECHECK_NEXT_STAGE
-6. Repeat until finalization
-```
-
-Limitations:
-
-- during mid-task rechecks, some models restarted planning from Router Pass 0, causing progress rollback
+- during mid-task rechecks, some models restarted from Router Pass 0 and rolled progress back
 
 ---
 
 ### V3.1: Resume-Safe Continuation Patch
 
-V3.1 solved the problem of restarting from the beginning during mid-task re-routing.
+V3.1 solved the problem of restarting from scratch during mid-task re-routing.
 
 Main improvements:
 
 - introduced resume-safe behavior
-- required mid-task rechecks to continue from current progress rather than from scratch
+- required mid-task rechecks to continue from current progress
 - locked completed todo items by default
 - prevented sudden regeneration of a 0/6 task list when 4/6 was already complete
-- added violation markers for rollback and for static QA pretending to be full QA
+- added violation markers for rollback and static QA overclaiming
 
 Key mode:
 
@@ -294,37 +322,17 @@ Key mode:
 ROUTER_RECHECK_MODE: RESUME_FROM_CURRENT_PROGRESS
 ```
 
-Typical violation:
+Limitation:
 
-```text
-ROUTER_VIOLATION: MIDTASK_ROUTER_RESET_TO_TASK_MAP
-```
-
-Limitations:
-
-- UI tasks could still jump directly from implementation to QA, without an independent visual review stage
+- UI tasks could still jump directly from implementation to QA without an independent visual review stage
 
 ---
 
-### V3.2: UI Review / Polish Mandatory Gate
+### V3.2: Required UI Review / Polish Gate
 
 V3.2 added a polishing stage for user-facing artifacts.
 
-As long as the task involves:
-
-- websites
-- landing pages
-- dashboards
-- forms
-- card UI
-- mobile pages
-- PDF cover pages
-- PDF report layouts
-- report covers
-- visual redesigns
-- typography, spacing, hierarchy, color, or responsiveness
-
-it should, by default, enter:
+If a task involves webpages, landing pages, dashboards, forms, cards, mobile pages, PDF covers, PDF report layouts, typography, spacing, hierarchy, color, or responsiveness, it should normally enter:
 
 ```text
 ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH
@@ -336,71 +344,71 @@ The default chain for UI tasks becomes:
 TASK_MAP -> DESIGN/PLANNING -> IMPLEMENTATION -> REVIEW/POLISH -> QA/VERIFICATION
 ```
 
-Why add this?
-
-Because QA can only prove:
-
-```text
-whether it runs, whether it can be clicked, and whether there are obvious errors
-```
-
-But Review / Polish is responsible for:
-
-```text
-whether it looks good, whether the hierarchy is clear, whether the spacing feels right, and whether it looks like a finished product
-```
-
-Limitations:
+Limitation:
 
 - the design stage could still fail to invoke an actual design skill
-- QA attribution could still be unclear, for example when the actual execution was `gstack + Chrome DevTools MCP` but only Chrome DevTools MCP was mentioned in the final summary
+- QA attribution could still be unclear
 
 ---
 
 ### V3.3: Native Todo Sync + Minimum Design Skill Requirement + QA Attribution Consistency
 
-V3.3 is the currently recommended version.
+V3.3 preserved and strengthened the workflow for creating / modifying / installing / validating skills, and treated this class of work as high-skill-density work.
 
 Main improvements:
 
-1. **Native Todo Sync Gate**
-
-   If the TRAE environment supports a native Todo List / task plan, router gates and work items must be synced into it.
-
-   Writing gates only in chat does not count as fully todo-bound.
-2. **Design Stage Skill Minimum**
-
-   For visual tasks such as UI, frontend, PDF layout, dashboards, landing pages, and report covers, the design stage should by default use at least one design-oriented skill.
-
-   Recommended design skills:
-
-   ```text
-   design-taste-frontend
-   ui-ux-pro-max
-   impeccable
-   high-end-visual-design
-   minimalist-ui (only when the style matches)
-   ```
-3. **QA Skill Attribution Consistency**
-
-   If the QA stage selects `gstack` and uses Chrome DevTools MCP underneath, the final ledger must write:
-
-   ```text
-   gstack（browser testing intent）+ Chrome DevTools MCP
-   ```
+1. **Native Todo Sync Gate**: If TRAE supports a native Todo List / task plan, router gates and work items must be synced into it.
+2. **Design Stage Skill Minimum**: For visual work such as UI, frontend, PDF layout, dashboards, landing pages, and report covers, the design stage should usually use at least one design-oriented skill.
+3. **QA Skill Attribution Consistency**: If the QA stage selects `gstack` and uses Chrome DevTools MCP underneath, the final ledger must write `gstack（browser testing intent）+ Chrome DevTools MCP`.
 
 V3.3 solved two practical problems:
 
-- the model wrote pretty gates in chat, but the official TRAE task list was never synced
-- the model actually used `gstack` to trigger browser QA, but the final summary only wrote Chrome DevTools MCP, making auditing unclear
+- the model wrote beautiful gates in chat, but the official TRAE task list was never synced
+- the model actually used `gstack` to trigger browser QA, but the final summary only wrote Chrome DevTools MCP
+
+---
+
+### V3.4 — Skill Invocation Proof
+
+V3.4 fixes a key issue exposed by V3.3:
+
+A model may already be doing staged routing and native Todo List sync, but still report “planned skills” as “actually invoked skills” in the final ledger.
+
+For example:
+
+- `diagnose` was only written into the plan, but never invoked;
+- `full-output-enforcement` was only a candidate, but never invoked;
+- `gstack` was claimed for QA, but no browser / MCP / `toolName: Skill` evidence existed.
+
+V3.4 adds **Skill Invocation Proof**, requiring every skill to be labeled with an invocation evidence level:
+
+```text
+Confirmed: TRAE UI explicitly shows toolName: Skill, or there is clear skill loading output
+Inferred: the UI does not show a skill call, but the behavior clearly follows that skill’s rules
+Planned only: the skill was only planned or listed as a candidate and must not be counted as actually used
+Unavailable / failed: the skill was intended but unavailable or failed
+```
+
+Core V3.4 rule:
+
+```text
+Do not list any skill as actually used unless there is toolName: Skill evidence or clear skill loading output.
+
+If a skill is claimed as used but has no invocation evidence, mark:
+ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION
+```
+
+In one sentence:
+
+> V3.3 answers “did staged collaboration happen?” V3.4 answers “which skills were truly invoked?”
 
 ---
 
 ## Future Improvement Direction
 
-### V3.3.1: QA Evidence Precision Rule
+### Future Direction: QA Evidence Precision Rule
 
-V3.3 is already usable, but QA evidence can still become more precise.
+V3.4 can already distinguish skill invocation evidence levels, but QA evidence can still become more precise.
 
 For example, during responsive checks, if the model only checks:
 
@@ -416,13 +424,7 @@ A better horizontal overflow detection method is:
 document.documentElement.scrollWidth <= document.documentElement.clientWidth
 ```
 
-Suggested future rule:
-
-```text
-When the model claims "no horizontal scroll / no horizontal overflow" on mobile, it must use scrollWidth and clientWidth to judge actual layout width, rather than only checking CSS overflow values.
-```
-
-This is not a blocker for V3.3, but it would make QA evidence stronger.
+A future rule can require the model to use actual layout width checks when claiming “no horizontal scroll / no horizontal overflow,” instead of only checking CSS overflow values.
 
 ---
 
@@ -430,16 +432,16 @@ This is not a blocker for V3.3, but it would make QA evidence stronger.
 
 ### 1. Current latest file location
 
-The latest version already placed in this repository is:
+The effective skill file should be located at:
 
 ```text
 skill-router/SKILL.md
 ```
 
-The historical backup of `V3.3` is located at:
+The historical backup of `V3.4` is recommended at:
 
 ```text
-所有版本/SKILL-v3.3.md
+所有版本/SKILL-v3.4.md
 ```
 
 ### 2. Confirm the skill name
@@ -449,7 +451,7 @@ The frontmatter at the top of `SKILL.md` should look roughly like:
 ```yaml
 ---
 name: skill-router
-description: "中文/English Skill Router V3.3 ..."
+description: "中文/English Skill Router V3.4 ..."
 ---
 ```
 
@@ -488,51 +490,48 @@ Remember to call skill-router.
 A stronger trigger prompt:
 
 ```text
-Please use skill-router in V3.3 Native Todo Sync mode.
-If the current environment supports TRAE native task planning / Todo List, sync the router gates and actual work items into the native plan list.
+Please use skill-router in V3.4 Skill Invocation Proof mode.
+If the current environment supports TRAE native task planning / Todo List, sync router gates and actual work items into the native plan list.
 Do not call skill-router only once at the beginning.
+The final output must include a Stage Marker Ledger and distinguish Confirmed / Inferred / Planned only / Unavailable failed.
 ```
 
 ---
 
 ## Recommended Test Prompt
 
-### Test V3.3 Native Todo List + Multi-Stage Collaboration
+### Test V3.4 Native Todo List + Multi-Stage Collaboration + Invocation Evidence Audit
 
 ```text
 Please create a completely independent small demo and do not modify my existing project code.
 
-Task: build a single-page web demo with the theme "Cyber Weather Console".
+Task: build a small LOVE-themed showcase page.
 
 Requirements:
-1. Create a new standalone directory.
-2. Use HTML, CSS, and JavaScript.
-3. Include a hero section, a current weather status card, a 4-hour forecast, an air quality / wind speed / humidity / UV data panel, and a city-switch button.
-4. Visual style: dark high-tech dashboard, blue-purple neon, premium but restrained.
-5. The page must be responsive and work well on desktop, tablet, and mobile.
-6. After finishing, open the page and verify button interaction, visible page changes, responsive layout, and console errors.
+1. Create a new standalone directory: skill-router-test-love-page/
+2. Use HTML, CSS, and JavaScript. Do not introduce a complex framework.
+3. The page should include: a gentle hero section, 3 LOVE-themed cards, a "moments of love" timeline, and a button that randomly displays a short love message.
+4. Visual style: gentle, clean, atmospheric, not cheesy, not too flashy.
+5. The page must be responsive on mobile and desktop.
+6. Do not write placeholders or pseudocode. Files must be directly runnable.
+7. After finishing, open the page and check button interaction, responsive layout, and console errors.
 
-Please prioritize using your currently available skill-router and suitable available skills to help complete the task.
-
-If the current environment supports a TRAE native task plan / Todo List, sync router gates and actual work items into the native plan list instead of writing the plan only in chat.
-
-Please use skills according to the real task stages: first plan the visual direction and structure, then implement, then do one round of visual review and small polishing, and finally perform browser verification.
+Prioritize skill-router V3.4 for staged dynamic routing, and in the final Stage Marker Ledger distinguish Confirmed / Inferred / Planned only / Unavailable failed.
 ```
 
 Expected behavior:
 
 - the TRAE native Todo List gets updated
-- the design stage actually invokes a design skill
-- the implementation stage invokes frontend implementation skills
-- Review / Polish happens after implementation
-- the QA stage uses `gstack（browser testing intent）+ Chrome DevTools MCP`
+- design, implementation, Review / Polish, and QA appear when relevant
 - the final output includes a Stage Marker Ledger
+- every skill is labeled as Confirmed / Inferred / Planned only / Unavailable failed
+- Planned only skills are not reported as Actual skills used
 
 ---
 
 ## How to Judge Whether It Is Qualified
 
-A qualified run should show:
+A qualified run should usually show:
 
 ```text
 ROUTER_CHECKPOINT_0_TASK_MAP
@@ -542,23 +541,31 @@ ROUTER_CHECKPOINT_4_REVIEW_OR_POLISH
 ROUTER_CHECKPOINT_5_QA_OR_VERIFICATION
 ```
 
-And it should show markers like:
+And markers like:
 
 ```text
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-1
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-3
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-4
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-5
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-6
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-1
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-3
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-4
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-5
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-6
 ```
 
-And in the end it should also include:
+The final output should also include:
 
 ```text
 Stage Marker Ledger
 ```
 
-with the actual skills used at each stage.
+and list:
+
+```text
+Confirmed skill calls
+Behavior-inferred skill guidance
+Planned only
+Unavailable / failed
+Violation
+```
 
 ---
 
@@ -573,9 +580,7 @@ Later router checkpoints:
 - QA
 ```
 
-Then the model just completes the whole task directly.
-
-This is not compliant.
+Then the model completes the whole task directly. This is not compliant.
 
 ### Skipping polish for UI tasks
 
@@ -587,22 +592,13 @@ If the task is UI, a webpage, a PDF cover page, cards, or a dashboard, this is u
 
 ### Writing plans only in chat, without syncing native Todo
 
-If TRAE supports a native Todo List, but the model only writes in chat:
-
-```text
-ROUTER_GATE ...
-WORK ...
-```
-
-and does not trigger a native Todo List update, that does not count as fully compliant.
+If TRAE supports a native Todo List but the model only writes `ROUTER_GATE ... WORK ...` in chat and does not trigger a native Todo List update, that does not count as fully compliant.
 
 ### Pretend QA
 
 ```text
 Static code review passed, so browser QA passed
 ```
-
-This is not compliant.
 
 Static review cannot pretend to be browser QA.
 
@@ -614,10 +610,25 @@ If `gstack` was selected and Chrome DevTools MCP was actually used for browser t
 gstack（browser testing intent）+ Chrome DevTools MCP
 ```
 
-instead of only:
+instead of only `Chrome DevTools MCP`.
+
+### Claiming skill usage without invocation evidence
+
+Non-compliant:
 
 ```text
-Chrome DevTools MCP
+Actual skills used: diagnose, full-output-enforcement, gstack
+```
+
+when the execution log does not contain corresponding `toolName: Skill` or clear skill loading output.
+
+In V3.4, this should become:
+
+```text
+Confirmed: skill-router, impeccable
+Planned only: diagnose, full-output-enforcement
+Unavailable / failed: gstack, if browser QA was attempted but failed
+Violation: ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION
 ```
 
 ---
@@ -652,25 +663,7 @@ Find:
 Available Skills Routing Table
 ```
 
-Replace the author's example skills with your own skills.
-
-Do not keep any skill that does not exist in your environment.
-
-Wrong example:
-
-```text
-frontend-design
-```
-
-If your environment does not have that skill, it must not remain there.
-
-Correct example:
-
-```text
-my-frontend-builder
-```
-
-provided that your environment really has that skill.
+Replace the author's example skills with your own skills. Do not keep any skill that does not exist in your environment.
 
 ### Step 3: Categorize your skills by stage
 
@@ -687,21 +680,15 @@ Documentation / Handoff
 Skill Creation / Skill Management
 ```
 
-For each skill, you should describe at least:
-
-- the skill name
-- suitable scenarios
-- unsuitable scenarios
-- which stage it belongs to
-- how it differs from other skills
+For each skill, describe at least: the skill name, suitable scenarios, unsuitable scenarios, which stage it belongs to, and how it differs from other skills.
 
 Example:
 
-| Engineering scenario           | Skill name              | Skill package | Usage rule                                                                        |
-| ------------------------------ | ----------------------- | ------------- | --------------------------------------------------------------------------------- |
-| Frontend / page implementation | `my-frontend-builder` | `my-skills` | Used to build complete pages, components, and dashboards.                         |
-| UI / polish review             | `my-ui-reviewer`      | `my-skills` | Used after implementation to check spacing, hierarchy, color, and responsiveness. |
-| Browser QA                     | `my-browser-qa`       | `my-skills` | Used to open pages, take screenshots, click, and verify interactions.             |
+| Engineering scenario | Skill name | Skill package | Usage rule |
+|---|---|---|---|
+| Frontend / page implementation | `my-frontend-builder` | `my-skills` | Used to build complete pages, components, and dashboards. |
+| UI / polish review | `my-ui-reviewer` | `my-skills` | Used after implementation to check spacing, hierarchy, color, and responsiveness. |
+| Browser QA | `my-browser-qa` | `my-skills` | Used to open pages, take screenshots, click, and verify interactions. |
 
 ### Step 4: Replace stage preference rules
 
@@ -715,22 +702,7 @@ Preferred skills:
 - high-end-visual-design
 ```
 
-Replace them with your own design skills:
-
-```text
-Preferred skills:
-- my-design-reviewer
-- my-ux-critic
-- my-visual-polisher
-```
-
-Likewise, also replace:
-
-- implementation skills
-- debugging skills
-- QA skills
-- documentation / handoff skills
-- skill creation skills
+Replace them with your own design skills. Do the same for implementation, debugging, QA, documentation, and skill creation rules.
 
 ### Step 5: If you do not have gstack
 
@@ -763,34 +735,24 @@ Never invent a skill.
 Never claim a skill was used unless it exists and was actually selected or invoked.
 Never claim future-stage skills were already used.
 Never claim browser QA passed unless browser QA actually ran.
+Never list Planned only skills as Actual skills used.
 ```
 
 These are the foundation that makes the router auditable.
 
 ### Step 7: Customize verification markers
 
-The default V3.3 markers are:
+The default V3.4 markers are:
 
 ```text
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-1
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-3
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-4
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-5
-SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.3-6
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-1
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-3
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-4
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-5
+SKILL_ROUTER_APPLIED: ROUTER_20260512_CN_GSTACK——V3.4-6
 ```
 
-You can change them to your own project token, for example:
-
-```text
-SKILL_ROUTER_APPLIED: ROUTER_20260512_MY_SKILL_SET——V3.3-4
-```
-
-But the replacement must be consistent across the whole file, including:
-
-- marker tables
-- trace rules
-- Stage Marker Ledger examples
-- marker references inside violation rules
+You can change them to your own project token, but the replacement must be consistent across marker tables, trace rules, Stage Marker Ledger examples, and marker references in violation rules.
 
 ---
 
@@ -809,7 +771,10 @@ ROUTER_VIOLATION: REVIEW_POLISH_REQUIRED_BUT_SKIPPED
 ROUTER_VIOLATION: QA_BEFORE_UI_POLISH_GATE
 ROUTER_VIOLATION: NATIVE_TODO_SYNC_SKIPPED
 ROUTER_VIOLATION: STATIC_QA_OVERCLAIM
+ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION
 ```
+
+`ROUTER_VIOLATION: SKILL_CLAIM_WITHOUT_INVOCATION` is used when the model claims a skill was used but there is no `toolName: Skill`, clear skill loading output, or other auditable invocation evidence.
 
 If these markers appear, the run is not fully compliant.
 
@@ -827,34 +792,19 @@ Skills from later stages may be listed as candidates, but cannot be claimed as a
 
 ### 3. Multi-skill collaboration, not random skill dumping
 
-The goal is:
-
-```text
-planning skill + implementation skill + polish skill + QA skill
-```
-
-not:
-
-```text
-just pile up a bunch of skill names
-```
+The goal is planning skill + implementation skill + polish skill + QA skill, not piling up skill names.
 
 ### 4. Evidence first
 
-Compared with "I used it," what matters more is:
-
-- whether there is a marker
-- whether there is a Todo List
-- whether there are file changes
-- whether there are browser screenshots
-- whether there are test results
-- whether there is a Stage Marker Ledger
+Compared with “I used it,” what matters more is markers, Todo List, file changes, browser screenshots, test results, Stage Marker Ledger, and invocation evidence levels.
 
 ### 5. Native Todo List matters
 
 Many models follow the official task plan more closely than the chat body.
 
-That is why V3.3 requires router gates to be written into the TRAE native Todo List whenever possible.
+### 6. V3.4 is about auditable failure
+
+V3.4 cannot guarantee that a weak model will always call every required skill, but it makes fake calls, missing calls, and planned-only claims much easier to expose.
 
 ---
 
@@ -874,24 +824,15 @@ You can also choose Apache-2.0, GPL, CC-BY, or another license if you prefer.
 
 This router was developed through repeated real-world testing and correction while using TRAE CN domestic models.
 
-It is not targeting theoretical issues, but very practical lazy-model behaviors:
+It targets practical lazy-model behaviors: calling the router only once, choosing too few skills, pretending later-stage skills were already used, not syncing the native Todo List, jumping straight to QA after UI work, using static review to pretend browser QA happened, restarting planning from scratch, overclaiming in the final summary, and reporting Planned only skills as Actual skills used.
 
-- calling the router only once at the beginning
-- choosing too few skills
-- pretending later-stage skills were already used
-- not syncing the native Todo List
-- jumping straight to QA after finishing UI
-- using static review to pretend browser QA happened
-- restarting planning from scratch in the middle
-- overclaiming in the final summary
-
-If you have run into similar problems, you can directly use V3.3, or adapt it into your own version based on your available skills.
+If you have run into similar problems, you can directly use V3.4 or adapt it into your own version based on your available skills.
 
 ---
 
 ## Maintenance Notes
 
-It is recommended to continue keeping historical version files:
+It is recommended to keep historical version files:
 
 ```text
 所有版本/SKILL-v1.md
@@ -900,12 +841,14 @@ It is recommended to continue keeping historical version files:
 所有版本/SKILL-v3.1.md
 所有版本/SKILL-v3.2.md
 所有版本/SKILL-v3.3.md
+所有版本/SKILL-v3.4.md
 ```
 
 That way, people can clearly see how this router evolved step by step.
 
 Possible future directions:
 
-- V3.3.1: more precise QA evidence, such as `scrollWidth <= clientWidth`
-- V3.4: stronger trace-file auditing
-- V4: automatically generate a dedicated routing table based on the user's available skills
+- more precise QA evidence, such as `scrollWidth <= clientWidth`
+- automatic export of skill invocation evidence logs
+- automatically generate a dedicated routing table based on the user's available skills
+- a separate `skill-router-auditor` that checks the ledger after the task is complete
