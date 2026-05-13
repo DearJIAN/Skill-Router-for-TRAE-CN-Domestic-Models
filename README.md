@@ -133,22 +133,42 @@ README 现在已经改成引用仓库里现有的图片文件。
 
 ## 为什么需要这个 skill-router？
 
-很多 AI Coder 有一个常见问题：
+这个项目来自我在 TRAE CN 国内模型里的真实使用困扰。
 
-1. 用户说：“优先调用你可用的 skills。”
-2. AI 开头调用一次 `skill-router`。
-3. 它列出几个“后续可能使用”的 skill。
-4. 然后整个任务都靠自己做。
-5. 最后总结时却说“多 skill 协同完成”。
+TRAE CN 里的国内模型并不是不会使用 skills，而是经常存在几个很明显的问题：
 
-这其实是假协同。
+1. **不主动调用 skills**  
+   很多时候，哪怕当前任务明显适合调用某些 skills，模型也不会主动用。  
+   用户必须在 prompt 里明确说“请优先调用可用 skills”“记得调用 skill-router”，它才更可能触发。
 
-这个项目的目标就是解决这种问题：
+2. **只在开头调用一次**  
+   即使用户明确提醒它使用 skills，模型也经常只在任务开始时调用一次 router。  
+   它会列出一堆“后续可能使用的 skills”，但真正进入实现、调试、抛光、QA、文档等阶段时，就不再重新调用了。
 
-```text
-不要让模型只在开头调用一次 router。
-要让模型在不同阶段重新路由，并实际调用当前阶段该用的 skills。
-```
+3. **scale 一大就偷懒**  
+   当任务变复杂、步骤变多、文件变多时，模型会倾向于少触发 skills。  
+   它会尽量压缩 skill 调用次数，甚至只调用一两个 skill，然后假装已经完成了多 skill 协作。
+
+4. **把“计划使用”说成“已经使用”**  
+   模型常常在开头把未来阶段的 skills 写进计划里，最后总结时却把这些 skills 当成已经实际使用过。  
+   这会导致用户很难判断：到底哪些 skill 真调用了，哪些只是写在计划里。
+
+5. **不会按阶段换 skill**  
+   一个真实开发任务通常包含多个阶段：需求澄清、规划、实现、调试、Review、视觉抛光、QA、文档、交接。  
+   不同阶段需要不同 skills，但模型经常只用一套开头选好的 skills 贯穿到底。
+
+所以这个 `skill-router` 的目标不是简单地“帮模型选 skill”，而是让模型：
+
+- 在任务开始时先构建候选 skill 池；
+- 根据任务阶段动态选择当前阶段真正需要的 skills；
+- 在进入新阶段前重新调用 router；
+- 把 router gate 和实际工作项同步到 TRAE 原生 Todo List；
+- 不允许把未来阶段 skills 提前算作已使用；
+- 在最终输出 Stage Marker Ledger，让用户能审计每个阶段到底用了哪些 skills。
+
+一句话：
+
+> 这个项目是为了解决 TRAE CN 国内模型“懒得调用 skills、只调用一次、少调用、假调用、不会分阶段调用”的问题。
 
 ---
 
@@ -172,17 +192,47 @@ skill-router/SKILL.md
 
 ## 核心能力
 
-这个 router 主要解决这些问题：
+这个 router 主要提供这些能力：
 
-- 防止模型编造不存在的 skill
-- 防止模型只开头调用一次 skill-router
-- 防止模型把未来阶段的 skill 提前说成“已使用”
-- 让模型按阶段重新选择 skills
-- 让不同 skills 形成专家团协作
-- 把 router gate 同步进 TRAE 原生 Todo List
-- 对 UI / PDF / 页面类任务强制加入 Review / Polish 阶段
-- 对 QA 阶段要求真实证据
-- 最终输出 Stage Marker Ledger，方便审计
+- **可用 skill 路由**  
+  根据当前任务，从真实 available skills 里选择合适的 skills。
+
+- **防止虚构 skill**  
+  不允许模型编造不存在的 skill 名称，也不允许声称使用了不存在的 skill。
+
+- **多 skill 专家团协作**  
+  不再默认找最少 skill，而是根据任务复杂度组织规划、实现、调试、抛光、QA、文档等不同角色的 skill 协作。
+
+- **分阶段重新路由**  
+  不允许只在任务开头调用一次。  
+  在实现、调试、Review、QA、文档等关键阶段前，需要重新调用 skill-router。
+
+- **阶段化验证 marker**  
+  每个阶段都有独立 marker，例如 `V3.3-1`、`V3.3-3`、`V3.3-4`、`V3.3-5`、`V3.3-6`，方便判断它到底有没有重新路由。
+
+- **Todo-Bound Gates**  
+  router gate 不能只写在聊天正文里，而应绑定到任务计划 / Todo List。
+
+- **TRAE 原生 Todo List 同步**  
+  如果当前环境支持 TRAE 原生任务计划 / Todo List，必须优先把 router gate 和实际 work item 同步进去。
+
+- **Resume-Safe 续跑**  
+  中途重新路由时，不允许从头规划旧任务。  
+  应该识别已完成事项，只为当前未完成工作簇重新路由。
+
+- **UI Review / Polish 强制闸门**  
+  对网页、dashboard、PDF 首页、卡片、移动端页面等用户可见产物，默认要求在实现后、QA 前做一轮视觉审查与小范围抛光。
+
+- **QA 证据约束**  
+  不允许用静态代码审查冒充浏览器 QA。  
+  如果使用 `gstack` 和 Chrome DevTools MCP，应在最终台账里明确写成：  
+  `gstack（browser testing intent）+ Chrome DevTools MCP`
+
+- **创建 / 改进 / 验证 skill 的特殊流程**  
+  当用户想创建新 skill 时，不会直接开写，而是先澄清需求、搜索现成 skill、判断安装还是创建，再用 `skill-creator` 或标准 `SKILL.md` 流程创建，并加入调用验证和测试流程。
+
+- **Stage Marker Ledger 最终台账**  
+  最后输出每个阶段的 marker、实际使用 skills、证据、跳过原因和验证方式，方便用户审计。
 
 ---
 
@@ -198,6 +248,8 @@ V1 是最初版本，主要能力是：
 - 将 `gstack` 视为顶层 skill，用于触发其内部 QA / browser testing / review / guard / ship 等能力
 - 加入基础验证标记
 - 支持创建、查找、安装、验证 skill 的特殊流程
+
+V1 已经包含“创建新 skill”的特殊流程：先澄清需求，再用 `find-skills` 搜索现成 skill，没有合适方案时再用 `skill-creator` 或标准 `SKILL.md` 手动创建，并要求加入调用验证和测试步骤。
 
 局限：
 
@@ -360,6 +412,8 @@ TASK_MAP -> DESIGN/PLANNING -> IMPLEMENTATION -> REVIEW/POLISH -> QA/VERIFICATIO
 ### V3.3：Native Todo Sync + 设计 Skill 最低要求 + QA 归因一致性
 
 V3.3 是当前推荐版本。
+
+V3.3 继续保留并强化了创建 / 修改 / 安装 / 验证 skill 的流程，并将这类任务视为高密度 skill 任务，通常需要 `find-skills`、`skill-creator`、`prompt-lookup`、`full-output-enforcement`、`handoff` 等多个 skills 分阶段协作。
 
 主要增强：
 

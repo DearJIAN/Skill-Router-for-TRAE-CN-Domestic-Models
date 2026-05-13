@@ -133,22 +133,42 @@ This example provides another real output style for the final summary section.
 
 ## Why is this skill-router needed?
 
-Many AI Coders share a common problem:
+This project comes from real frustrations I encountered while using domestic models inside TRAE CN.
 
-1. The user says: "Prioritize the skills you actually have."
-2. The AI calls `skill-router` once at the beginning.
-3. It lists a few skills that it might use later.
-4. Then it completes the entire task by itself.
-5. In the final summary, it still claims "multi-skill collaboration."
+The issue is not that TRAE CN domestic models cannot use skills. The issue is that they often show several very obvious failure patterns:
 
-That is fake collaboration.
+1. **They do not proactively call skills**  
+   Even when the current task is clearly a good fit for certain skills, the model often does not use them on its own.  
+   The user usually has to explicitly say things like "please prioritize available skills" or "remember to call skill-router" before it is likely to trigger.
 
-This project exists to solve exactly that problem:
+2. **They call the router only once at the beginning**  
+   Even when the user clearly reminds the model to use skills, it often calls the router only once at task start.  
+   It may list a batch of "skills that might be used later," but once the task moves into implementation, debugging, polish, QA, documentation, and other real stages, it stops re-routing.
 
-```text
-Do not let the model call the router only once at the beginning.
-Make it re-route at different stages and actually invoke the skills needed for the current stage.
-```
+3. **They get lazy when the task scale grows**  
+   As tasks become more complex, involve more steps, or touch more files, the model tends to trigger fewer skills.  
+   It compresses skill usage as much as possible, sometimes calling only one or two skills and then pretending multi-skill collaboration already happened.
+
+4. **They present "planned usage" as "actual usage"**  
+   The model often writes future-stage skills into the plan at the beginning, then later talks about them in the final summary as if they were actually used.  
+   This makes it hard for users to tell which skills were truly invoked and which ones were only written into the plan.
+
+5. **They do not switch skills by stage**  
+   A real development task usually has multiple stages: requirement clarification, planning, implementation, debugging, review, visual polish, QA, documentation, and handoff.  
+   Different stages need different skills, but the model often tries to use the same set of skills selected at the beginning all the way through.
+
+So the goal of this `skill-router` is not simply to "help the model choose skills." Its goal is to make the model:
+
+- build a candidate skill pool at task start;
+- dynamically choose only the skills that are truly needed for the current stage;
+- call the router again before entering each new key stage;
+- sync router gates and actual work items into the TRAE native Todo List;
+- avoid counting future-stage skills as already used;
+- output a final Stage Marker Ledger so users can audit which skills were actually used at each stage.
+
+In one sentence:
+
+> This project exists to solve the TRAE CN domestic model problem of being reluctant to call skills, calling them only once, calling too few of them, faking skill usage, and failing to re-route by stage.
 
 ---
 
@@ -172,17 +192,47 @@ That means the `skill-router/` folder currently already contains the latest V3.3
 
 ## Core Capabilities
 
-This router mainly solves the following problems:
+This router mainly provides the following capabilities:
 
-- prevents the model from inventing nonexistent skills
-- prevents the model from calling `skill-router` only once at the beginning
-- prevents the model from claiming future-stage skills were already used
-- makes the model re-select skills by stage
-- encourages expert-team style collaboration across multiple skills
-- syncs router gates into TRAE native Todo List
-- forces a Review / Polish stage for UI / PDF / page-type tasks
-- requires real evidence for QA
-- outputs a final Stage Marker Ledger for auditing
+- **Available-skill routing**  
+  It selects appropriate skills for the current task from the real set of available skills.
+
+- **Prevention of invented skills**  
+  It does not allow the model to invent nonexistent skill names, and it does not allow the model to claim it used a skill that does not actually exist.
+
+- **Multi-skill expert-team collaboration**  
+  It no longer defaults to using the fewest possible skills. Instead, it organizes staged collaboration across planning, implementation, debugging, polish, QA, documentation, and other roles based on task complexity.
+
+- **Stage-by-stage re-routing**  
+  It does not allow a single router call only at task start.  
+  Before key stages such as implementation, debugging, review, QA, and documentation, the model is expected to call skill-router again.
+
+- **Stage validation markers**  
+  Each stage has independent markers such as `V3.3-1`, `V3.3-3`, `V3.3-4`, `V3.3-5`, and `V3.3-6`, making it easier to verify whether re-routing actually happened.
+
+- **Todo-Bound Gates**  
+  Router gates should not exist only in the chat message. They should be bound to the task plan / Todo List.
+
+- **TRAE native Todo List sync**  
+  If the current environment supports TRAE native task planning / Todo List, router gates and actual work items must be synced there first.
+
+- **Resume-Safe continuation**  
+  When re-routing mid-task, the model should not restart the old plan from scratch.  
+  It should recognize what has already been completed and re-route only for the currently unfinished work cluster.
+
+- **Forced UI Review / Polish gate**  
+  For user-visible outputs such as webpages, dashboards, PDF front pages, cards, and mobile screens, the default expectation is a visual review and small-scope polish pass after implementation and before QA.
+
+- **QA evidence constraints**  
+  Static code inspection must not be used as a substitute for browser QA.  
+  If `gstack` and Chrome DevTools MCP are used, the final ledger should explicitly record it as:  
+  `gstack (browser testing intent) + Chrome DevTools MCP`
+
+- **Special workflow for creating / improving / validating skills**  
+  When the user wants to create a new skill, the model should not start writing immediately. It should first clarify requirements, search for an existing skill, decide whether to install or create, then use `skill-creator` or a standard `SKILL.md` flow, and include invocation validation and testing.
+
+- **Final Stage Marker Ledger**  
+  The final output should include each stage's marker, actually used skills, evidence, skip reasons, and validation method so the user can audit the work.
 
 ---
 
@@ -198,6 +248,8 @@ V1 was the initial version. Its main capabilities were:
 - treating `gstack` as a top-level skill to trigger its internal QA / browser testing / review / guard / ship abilities
 - adding a basic verification marker
 - supporting special flows for creating, finding, installing, and validating skills
+
+V1 already included a special workflow for creating a new skill: first clarify the requirement, then use `find-skills` to search for an existing option, and only if nothing suitable exists, create one manually with `skill-creator` or a standard `SKILL.md` flow, while also requiring invocation validation and testing steps.
 
 Limitations:
 
@@ -360,6 +412,8 @@ Limitations:
 ### V3.3: Native Todo Sync + Minimum Design Skill Requirement + QA Attribution Consistency
 
 V3.3 is the currently recommended version.
+
+V3.3 continues to preserve and strengthen the workflow for creating / modifying / installing / validating skills, and treats this class of work as a high-density skill task that often needs staged collaboration across multiple skills such as `find-skills`, `skill-creator`, `prompt-lookup`, `full-output-enforcement`, and `handoff`.
 
 Main improvements:
 
