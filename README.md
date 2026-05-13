@@ -1,6 +1,6 @@
 # Skill Router for TRAE CN Domestic Models
 
-[English Version](./readme_EN.md)
+[English Version](./README_EN.md)
 
 > 中文名：对 TRAE CN 国内模型的技能路由
 > 一个面向 TRAE CN / 国内模型的多 Skill 分阶段路由、协同与审计方案。
@@ -11,6 +11,7 @@
 
 ## 目录
 
+- [建议搭配 Prompt（通用版）](#建议搭配-prompt通用版)
 - [项目目录说明](#项目目录说明)
 - [样例展示](#样例展示)
 - [为什么需要这个 skill-router？](#为什么需要这个-skill-router)
@@ -32,6 +33,20 @@
 
 ---
 
+## 建议搭配 Prompt（通用版）
+
+```
+如果当前环境支持 TRAE 原生任务计划 / Todo List，请把你的 router gate 和实际工作项同步到原生计划列表里，不要只在聊天正文里写计划。
+
+请根据当前任务的真实类型和阶段动态选择 skills，并在进入新的关键阶段前重新调用 skill-router。每次 router pass 只选择当前阶段真正需要的 skills，不要把后续阶段的 skill 当成已经使用过。
+
+任务计划必须根据本次任务动态生成，不要套固定模板。不同任务可以有不同阶段，例如需求澄清、设计/规划、架构分析、实现、调试、测试、Review、视觉抛光、浏览器验证、文档更新、交接总结等。只有当任务确实涉及用户可见 UI、页面、PDF 视觉、dashboard、卡片、移动端界面或视觉设计时，才需要安排独立的视觉审查 / 抛光阶段；只有当任务确实需要真实页面或浏览器行为验证时，才需要安排浏览器 QA。
+
+不要只在开头调用一次 skill-router。不要只把后续 router checkpoints 写在聊天正文里。每个关键工作项前都应有对应的 router gate；如果支持原生 Todo List，应优先同步到原生 Todo List。
+```
+
+---
+
 ## 项目目录说明
 
 推荐仓库结构如下：
@@ -39,7 +54,7 @@
 ```text
 Skill Router for TRAE CN Domestic Models/
 ├── README.md
-├── readme_EN.md
+├── README_EN.md
 ├── skill-router/
 │   └── SKILL.md
 ├── 所有版本/

@@ -11,6 +11,7 @@ Its goal is not to let the model merely say it used a skill, but to make it trul
 
 ## Table of Contents
 
+- [Suggested Companion Prompt (General Use)](#suggested-companion-prompt-general-use)
 - [Repository Structure](#repository-structure)
 - [Example Showcase](#example-showcase)
 - [Why is this skill-router needed?](#why-is-this-skill-router-needed)
@@ -32,6 +33,20 @@ Its goal is not to let the model merely say it used a skill, but to make it trul
 
 ---
 
+## Suggested Companion Prompt (General Use)
+
+```
+If the current environment supports TRAE's native task plan / Todo List, sync your router gates and actual work items into the native Todo List. Do not only write the plan in the chat message.
+
+Dynamically choose skills based on the real task type and the current task stage. Before entering any new key stage, re-run skill-router. Each router pass should select only the skills that are genuinely needed for the current stage. Do not treat future-stage skills as already used.
+
+The task plan must be generated dynamically for the current task. Do not reuse a fixed template. Different tasks may require different stages, such as requirement clarification, design/planning, architecture analysis, implementation, debugging, testing, review, visual polish, browser verification, documentation updates, and handoff summaries. Only add a dedicated visual review / polish stage when the task actually involves user-facing UI, webpages, PDF visuals, dashboards, cards, mobile screens, or visual design. Only add browser QA when the task actually requires real page behavior or browser-based verification.
+
+Do not call skill-router only once at the beginning. Do not only list future router checkpoints in the chat message. Each key work item should have a corresponding router gate before it. If the native Todo List is available, sync router gates there first.
+```
+
+---
+
 ## Repository Structure
 
 The recommended repository structure is:
@@ -39,7 +54,7 @@ The recommended repository structure is:
 ```text
 Skill Router for TRAE CN Domestic Models/
 ├── README.md
-├── readme_EN.md
+├── README_EN.md
 ├── skill-router/
 │   └── SKILL.md
 ├── 所有版本/
