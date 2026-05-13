@@ -2,7 +2,7 @@
 
 [English Version](./readme_EN.md)
 
-> 中文名：对 TRAE CN 国内模型的技能路由  
+> 中文名：对 TRAE CN 国内模型的技能路由
 > 一个面向 TRAE CN / 国内模型的多 Skill 分阶段路由、协同与审计方案。
 
 这个项目提供一个 `skill-router` 技能，用来帮助 TRAE CN 里的 AI Coder 更稳定地调用可用 skills。
@@ -353,7 +353,6 @@ V3.3 是当前推荐版本。
    如果 TRAE 环境支持原生 Todo List / 任务计划，router gate 和 work item 必须同步进去。
 
    只在聊天正文里写 gate，不算完整 todo-bound。
-
 2. **Design Stage Skill Minimum**
 
    对 UI、前端、PDF layout、dashboard、landing page、report cover 等视觉任务，设计阶段默认至少使用一个设计类 skill。
@@ -367,7 +366,6 @@ V3.3 是当前推荐版本。
    high-end-visual-design
    minimalist-ui（仅当风格匹配）
    ```
-
 3. **QA Skill Attribution Consistency**
 
    如果 QA 阶段选择了 `gstack`，底层使用 Chrome DevTools MCP，那么最终台账必须写成：
@@ -684,13 +682,11 @@ Skill Creation / Skill Management
 
 示例：
 
-```markdown
-| 工程用途场景 | Skill 名称 | 所属 skill 包 | 用途判断 |
-|---|---|---|---|
-| 前端 / 页面实现 | `my-frontend-builder` | `my-skills` | 用于创建完整页面、组件、dashboard。 |
-| UI / 抛光审查 | `my-ui-reviewer` | `my-skills` | 用于实现后检查间距、层级、配色和响应式。 |
-| 浏览器 QA | `my-browser-qa` | `my-skills` | 用于打开页面、截图、点击、验证交互。 |
-```
+| 工程用途场景    | Skill 名称              | 所属 skill 包 | 用途判断                                 |
+| --------------- | ----------------------- | ------------- | ---------------------------------------- |
+| 前端 / 页面实现 | `my-frontend-builder` | `my-skills` | 用于创建完整页面、组件、dashboard。      |
+| UI / 抛光审查   | `my-ui-reviewer`      | `my-skills` | 用于实现后检查间距、层级、配色和响应式。 |
+| 浏览器 QA       | `my-browser-qa`       | `my-skills` | 用于打开页面、截图、点击、验证交互。     |
 
 ### 第四步：替换阶段偏好规则
 

@@ -2,7 +2,7 @@
 
 [中文版](./README.md)
 
-> Chinese name: Skill Routing for TRAE CN Domestic Models  
+> Chinese name: Skill Routing for TRAE CN Domestic Models
 > A staged, auditable, multi-skill routing, collaboration, and governance framework for TRAE CN / domestic models.
 
 This project provides a `skill-router` skill to help AI Coders in TRAE CN call available skills more reliably.
@@ -353,7 +353,6 @@ Main improvements:
    If the TRAE environment supports a native Todo List / task plan, router gates and work items must be synced into it.
 
    Writing gates only in chat does not count as fully todo-bound.
-
 2. **Design Stage Skill Minimum**
 
    For visual tasks such as UI, frontend, PDF layout, dashboards, landing pages, and report covers, the design stage should by default use at least one design-oriented skill.
@@ -367,7 +366,6 @@ Main improvements:
    high-end-visual-design
    minimalist-ui (only when the style matches)
    ```
-
 3. **QA Skill Attribution Consistency**
 
    If the QA stage selects `gstack` and uses Chrome DevTools MCP underneath, the final ledger must write:
@@ -684,13 +682,11 @@ For each skill, you should describe at least:
 
 Example:
 
-```markdown
-| Engineering scenario | Skill name | Skill package | Usage rule |
-|---|---|---|---|
-| Frontend / page implementation | `my-frontend-builder` | `my-skills` | Used to build complete pages, components, and dashboards. |
-| UI / polish review | `my-ui-reviewer` | `my-skills` | Used after implementation to check spacing, hierarchy, color, and responsiveness. |
-| Browser QA | `my-browser-qa` | `my-skills` | Used to open pages, take screenshots, click, and verify interactions. |
-```
+| Engineering scenario           | Skill name              | Skill package | Usage rule                                                                        |
+| ------------------------------ | ----------------------- | ------------- | --------------------------------------------------------------------------------- |
+| Frontend / page implementation | `my-frontend-builder` | `my-skills` | Used to build complete pages, components, and dashboards.                         |
+| UI / polish review             | `my-ui-reviewer`      | `my-skills` | Used after implementation to check spacing, hierarchy, color, and responsiveness. |
+| Browser QA                     | `my-browser-qa`       | `my-skills` | Used to open pages, take screenshots, click, and verify interactions.             |
 
 ### Step 4: Replace stage preference rules
 
